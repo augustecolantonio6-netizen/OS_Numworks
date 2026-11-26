@@ -1,11 +1,23 @@
 diff --git a/apps/apps_container.cpp b/apps/apps_container.cpp
-index 60bcdce..567081a 100644
+index 60bcdce..c492624 100644
 --- a/apps/apps_container.cpp
 +++ b/apps/apps_container.cpp
-@@ -152,43 +152,27 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
+@@ -136,6 +136,10 @@ void AppsContainer::suspend(bool checkIfOnOffKeyReleased) {
+     s_activeApp->displayModalViewController(promptController(), 0.f, 0.f);
+   }
+   Ion::Power::suspend(checkIfOnOffKeyReleased);
++  if (m_usbConnection.visible() && s_activeApp->snapshot() == usbConnectedAppSnapshot() &&
++      Ion::USB::isPlugged() && !globalPreferences->isInExamMode()) {
++    Ion::USB::enable();
++  }
+   /* Ion::Power::suspend() completely shuts down the LCD controller. Therefore
+    * the frame memory is lost. That's why we need to force a window redraw
+    * upon wakeup, otherwise the screen is filled with noise. */
+@@ -151,44 +155,47 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
+   if (event == Ion::Events::USBEnumeration || event == Ion::Events::USBPlug || event == Ion::Events::BatteryCharging) {
      Ion::LED::updateColorWithPlugAndCharge();
    }
-   if (event == Ion::Events::USBEnumeration) {
+-  if (event == Ion::Events::USBEnumeration) {
 -    if (Ion::USB::isPlugged()) {
 -      App::Snapshot * activeSnapshot = (s_activeApp == nullptr ? appSnapshotAtIndex(0) : s_activeApp->snapshot());
 -      /* Just after a software update, the battery timer does not have time to
@@ -34,39 +46,58 @@ index 60bcdce..567081a 100644
 -         * time the device will be ready to go in DFU mode. Otherwise, the user
 -         * needs to re-plug the device to go into DFU mode. */
 -        Ion::USB::clearEnumerationInterrupt();
--      }
++  const bool plugged = Ion::USB::isPlugged();
++  bool onUsbScreen = s_activeApp->snapshot() == usbConnectedAppSnapshot();
++  m_usbConnection.update(plugged, onUsbScreen && event == Ion::Events::Back);
++  if (!onUsbScreen && m_usbConnection.visible()) {
++    App::Snapshot *previous = s_activeApp->snapshot();
++    updateBatteryState();
++    if (switchTo(usbConnectedAppSnapshot())) {
++      m_beforeUsb = previous;
++      if (!GlobalPreferences::sharedGlobalPreferences()->isInExamMode()) {
++        Ion::USB::enable();
++      }
++      onUsbScreen = true;
++      if (event != Ion::Events::USBEnumeration) {
++        return true;
+       }
 -    } else {
 -      /* Sometimes, the device gets an ENUMDNE interrupts when being unplugged
 -       * from a non-USB communicating host (e.g. a USB charger). The interrupt
 -       * must me cleared: if not the next enumeration attempts will not be
 -       * detected. */
 -      Ion::USB::clearEnumerationInterrupt();
+     }
+-  } else {
++  }
++
++  if (event == Ion::Events::USBEnumeration) {
++    if (plugged && onUsbScreen && m_usbConnection.visible() &&
++        !GlobalPreferences::sharedGlobalPreferences()->isInExamMode()) {
++      // Give the host the stock Upsilon USB/DFU service until Back or unplug.
++      Ion::USB::DFU(true);
++      Ion::LED::updateColorWithPlugAndCharge();
++      m_usbConnection.update(Ion::USB::isPlugged(), true);
++    }
 +    Ion::USB::clearEnumerationInterrupt();
 +  }
 +
-+  const bool onUsbScreen = s_activeApp->snapshot() == usbConnectedAppSnapshot();
-+  const bool dismissUsb = onUsbScreen && event == Ion::Events::Back;
-+  m_usbConnection.update(Ion::USB::isPlugged(), dismissUsb);
 +  if (onUsbScreen && !m_usbConnection.visible()) {
++    Ion::USB::disable();
 +    if (switchTo(m_beforeUsb)) {
 +      m_beforeUsb = nullptr;
-     }
--  } else {
++    }
 +    return true;
 +  }
-+  if (!onUsbScreen && m_usbConnection.visible()) {
-+    App::Snapshot *previous = s_activeApp->snapshot();
-+    if (switchTo(usbConnectedAppSnapshot())) {
-+      m_beforeUsb = previous;
-+      return true;
-+    }
++  if (event == Ion::Events::USBEnumeration) {
++    return true;
 +  }
 +
 +  {
      if (KDIonContext::sharedContext()->zoomEnabled) {
        bool changedZoom = true;
 
-@@ -237,65 +221,14 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
+@@ -237,65 +244,14 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
    return didProcessEvent || alphaLockWantsRedraw;
  }
 
@@ -105,9 +136,8 @@ index 60bcdce..567081a 100644
 -  // If shift + Home are pressed, we switch to the first app.
 -  if (event == Ion::Events::ShiftHome) {
 -    switchTo(appSnapshotAtIndex(1));
-+  if (event == Ion::Events::USBPlug || event == Ion::Events::USBEnumeration) {
-     return true;
-   }
+-    return true;
+-  }
 -
 -  // Iterate through the switch events to find the one that matches the event, if one match, switch to the app at the index of the switch event.
 -  for(int i = 0; i < std::min((int) (sizeof(switch_events) / sizeof(Ion::Events::Event)), APPS_CONTAINER_SNAPSHOT_COUNT); i++) {
@@ -116,22 +146,23 @@ index 60bcdce..567081a 100644
 -      switchTo(appSnapshotAtIndex(i+1));
 -      return true;
 -    }
-+  if (s_activeApp->snapshot() != usbConnectedAppSnapshot() &&
-+      (event == Ion::Events::Home || event == Ion::Events::Back)) {
-+    return switchTo(appSnapshotAtIndex(0));
-   }
+-  }
 -
 -  // Add EE shortcut to go to the settings (app number 12)
 -  if (event == Ion::Events::EE) {
 -    switchTo(appSnapshotAtIndex(12));
--    return true;
--  }
++  if (event == Ion::Events::USBPlug || event == Ion::Events::USBEnumeration) {
+     return true;
+   }
 -
 -  // Add Shift + Ans shortcut to go to the previous app
 -  if (event == Ion::Events::ShiftAns) {
 -    switchTo(appSnapshotAtIndex(m_lastAppIndex));
 -    return true;
--  }
++  if (s_activeApp->snapshot() != usbConnectedAppSnapshot() &&
++      (event == Ion::Events::Home || event == Ion::Events::Back)) {
++    return switchTo(appSnapshotAtIndex(0));
+   }
 -
    // If the event is the OnOff key, we suspend the calculator.
    if (event == Ion::Events::OnOff) {
@@ -169,13 +200,13 @@ index ce36dc5..9da196b 100644
 +  return appSnapshotAtIndex(0);
  }
 diff --git a/apps/home/base.en.i18n b/apps/home/base.en.i18n
-index 2a65458..dfcfb36 100644
+index 2a65458..0ed3597 100644
 --- a/apps/home/base.en.i18n
 +++ b/apps/home/base.en.i18n
 @@ -1,4 +1,4 @@
  Apps = "Applications"
 -AppsCapital = "UPSILON"
-+AppsCapital = "AOS v0.3.2"
++AppsCapital = "AOS v0.3.3"
  ForbiddenAppInExamMode1 = "This application is"
  ForbiddenAppInExamMode2 = "forbidden in exam mode"
 diff --git a/apps/home/controller.cpp b/apps/home/controller.cpp
