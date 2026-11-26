@@ -2,6 +2,10 @@ name: Build AOS for N0110
 
 on:
   push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
   pull_request:
   workflow_dispatch:
 
@@ -22,9 +26,50 @@ jobs:
           g++ -std=c++11 -Wall -Wextra -Werror -Isrc src/launcher.cpp tests/launcher.cpp -o "$RUNNER_TEMP/aos-launcher-test"
           "$RUNNER_TEMP/aos-launcher-test"
       - name: Build and validate both slots
-        run: bash tools/build.sh
+        run: |
+          bash tools/build.sh
+          cp LICENSE.md dist/
       - uses: actions/upload-artifact@v4
         with:
           name: AOS-N0110
           path: dist/
           if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: firmware
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.ref }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: AOS-N0110
+          path: dist/
+      - name: Publish firmware to GitHub Releases
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          sha256sum --check SHA256SUMS
+          assets=(AOS-N0110-slot-{A,B}.{dfu,bin} SHA256SUMS LICENSE.md)
+          if draft=$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq '.isDraft'); then
+            if [[ "$draft" == 'true' ]]; then
+              gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+              gh release edit "$GITHUB_REF_NAME" --draft=false --verify-tag
+            else
+              published_assets=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
+              for asset in "${assets[@]}"; do
+                if ! grep -Fxq "$asset" <<< "$published_assets"; then
+                  echo "::error::Published release $GITHUB_REF_NAME is missing $asset."
+                  exit 1
+                fi
+              done
+            fi
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --verify-tag --generate-notes
+          fi

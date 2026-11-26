@@ -26,6 +26,17 @@ bash tools/build.sh
 
 Le script récupère une révision précise d'Upsilon dans `.build/`, utilise ses pilotes Ion/Kandinsky et dépose les quatre images avec leurs sommes SHA-256 dans `dist/`. Le workflow GitHub Actions fournit aussi ces fichiers dans l'artefact `AOS-N0110`.
 
+## Publier une version
+
+Pousse un tag de version commençant par `v` depuis le commit à publier.
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+GitHub Actions compile les deux slots depuis le tag, lance les tests et publie les quatre images, le fichier `SHA256SUMS` et la licence dans [Releases](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases) si le build réussit.
+
 ## Ajouter une application native plus tard
 
 - `src/apps.h` contient le catalogue compilé. Chaque entrée déclare son nom, son libellé court et ses fonctions.
