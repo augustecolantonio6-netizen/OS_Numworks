@@ -1,0 +1,30 @@
+name: Build AOS for N0110
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  firmware:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-none-eabi binutils-arm-none-eabi libfreetype-dev pkg-config
+      - name: Test launcher
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror -Isrc src/launcher.cpp tests/launcher.cpp -o "$RUNNER_TEMP/aos-launcher-test"
+          "$RUNNER_TEMP/aos-launcher-test"
+      - name: Build and validate both slots
+        run: bash tools/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AOS-N0110
+          path: dist/
+          if-no-files-found: error
