@@ -2,18 +2,20 @@
 
 AOS est un firmware personnalisé pour la NumWorks N0110. Son premier écran est un accueil sombre avec une grille de trois colonnes, un indicateur de batterie et un catalogue vide. Les six cases dessinées à l'écran sont des emplacements visuels. Le système démarre sur cet accueil et contient zéro application.
 
-## Télécharger AOS v0.2.0
+## Télécharger AOS pour N0110
 
-Télécharge directement l’image qui correspond à ton slot. [Sommes SHA-256](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/SHA256SUMS).
+Les liens « Dernière release » suivent automatiquement la version stable désignée par GitHub. Avant la première publication dans Releases, utilise les liens directs v0.2.0.
+
+| Slot | Format | Adresse | Dernière release | v0.2.0 |
+| --- | --- | --- | --- | --- |
+| A | `.dfu` | `0x90000000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-A.dfu) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-A.dfu) |
+| A | `.bin` | `0x90000000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-A.bin) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-A.bin) |
+| B | `.dfu` | `0x90400000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-B.dfu) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-B.dfu) |
+| B | `.bin` | `0x90400000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-B.bin) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-B.bin) |
+
+Sommes SHA-256 de la [dernière release](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/SHA256SUMS) et de la [v0.2.0](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/SHA256SUMS).
 
 Les images ont le format de démarrage d'Upsilon pour N0110. Phi est le chargeur de démarrage visé. Le démarrage et la reprise de veille avec la version de Phi installée sur la calculatrice restent à valider sur l'appareil.
-
-| Image | Adresse de début | Format |
-| --- | --- | --- |
-| [AOS-N0110-slot-A.dfu](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-A.dfu) | `0x90000000` | DfuSe avec adresse intégrée |
-| [AOS-N0110-slot-B.dfu](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-B.dfu) | `0x90400000` | DfuSe avec adresse intégrée |
-| [AOS-N0110-slot-A.bin](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-A.bin) | `0x90000000` | Image brute liée pour A |
-| [AOS-N0110-slot-B.bin](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-B.bin) | `0x90400000` | Image brute liée pour B |
 
 Identifie d'abord le slot libre et la version de Phi. Le flash efface le contenu du slot choisi. Chaque image couvre uniquement de la flash externe dans son slot et le build vérifie cette limite. La compilation et les tests se déroulent sans connexion à une calculatrice.
 
