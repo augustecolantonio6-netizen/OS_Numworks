@@ -2,16 +2,18 @@
 
 AOS est un firmware personnalisé pour la NumWorks N0110. Son premier écran est un accueil sombre avec une grille de trois colonnes, un indicateur de batterie et un catalogue vide. Les six cases dessinées à l'écran sont des emplacements visuels. Le système démarre sur cet accueil et contient zéro application.
 
-## Images pour les slots de démarrage
+## Télécharger AOS v0.1.0
 
-Le [pack de la première version](firmware/AOS-0.1.0-N0110.zip) contient les images des deux slots et leurs sommes SHA-256. Les images ont le format de démarrage d'Upsilon pour N0110. Phi est le chargeur de démarrage visé. Le démarrage et la reprise de veille avec la version de Phi installée sur la calculatrice restent à valider sur l'appareil.
+Télécharge directement l’image qui correspond à ton slot. [Sommes SHA-256](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.1.0/SHA256SUMS).
+
+Les images ont le format de démarrage d'Upsilon pour N0110. Phi est le chargeur de démarrage visé. Le démarrage et la reprise de veille avec la version de Phi installée sur la calculatrice restent à valider sur l'appareil.
 
 | Image | Adresse de début | Format |
 | --- | --- | --- |
-| `AOS-N0110-slot-A.dfu` | `0x90000000` | DfuSe avec adresse intégrée |
-| `AOS-N0110-slot-B.dfu` | `0x90400000` | DfuSe avec adresse intégrée |
-| `AOS-N0110-slot-A.bin` | `0x90000000` | Image brute liée pour A |
-| `AOS-N0110-slot-B.bin` | `0x90400000` | Image brute liée pour B |
+| [AOS-N0110-slot-A.dfu](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.1.0/AOS-N0110-slot-A.dfu) | `0x90000000` | DfuSe avec adresse intégrée |
+| [AOS-N0110-slot-B.dfu](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.1.0/AOS-N0110-slot-B.dfu) | `0x90400000` | DfuSe avec adresse intégrée |
+| [AOS-N0110-slot-A.bin](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.1.0/AOS-N0110-slot-A.bin) | `0x90000000` | Image brute liée pour A |
+| [AOS-N0110-slot-B.bin](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.1.0/AOS-N0110-slot-B.bin) | `0x90400000` | Image brute liée pour B |
 
 Identifie d'abord le slot libre et la version de Phi. Le flash efface le contenu du slot choisi. Chaque image couvre uniquement de la flash externe dans son slot et le build vérifie cette limite. La compilation et les tests se déroulent sans connexion à une calculatrice.
 
