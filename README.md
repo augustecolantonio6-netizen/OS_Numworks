@@ -34,6 +34,8 @@ Le script récupère une révision précise d'Upsilon dans `.build/`, utilise se
 
 Une application native enregistre une fonction `draw(KDContext &)`. L'origine de sa zone de dessin est le coin supérieur gauche de l'espace sous l'en-tête, qui mesure 320 × 191 pixels. Elle peut ajouter les fonctions facultatives `enter()`, `leave()` et `handle(Input)`. Le gestionnaire reçoit la touche normalisée et l'identifiant brut d'Ion. Il renvoie `true` si l'écran doit être redessiné. Pour conserver une application dans l'image, ajoute ses fichiers au répertoire `src/`, ses sources C++ au build et son entrée au catalogue. Les applications partagent l'espace mémoire du firmware.
 
+Initialise l'état au chargement de l'application dans `enter()`, ou utilise une initialisation constante. Le code de démarrage rejette les constructeurs globaux exécutés au démarrage. Le build vérifie cette contrainte avant de publier la paire d'images.
+
 ## Crédits
 
 AOS utilise Ion, Kandinsky et le format de démarrage d'[Upsilon](https://github.com/UpsilonNumworks/Upsilon), issu d'Omega et d'Epsilon. Le script spécialise la liste des sources compilées et adapte les valeurs sentinelles des champs d'applications externes. Voir la [licence CC BY-NC-SA 4.0](LICENSE.md).
