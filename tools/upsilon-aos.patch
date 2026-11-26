@@ -1,5 +1,5 @@
 diff --git a/apps/apps_container.cpp b/apps/apps_container.cpp
-index 60bcdce..93211da 100644
+index 60bcdce..567081a 100644
 --- a/apps/apps_container.cpp
 +++ b/apps/apps_container.cpp
 @@ -152,43 +152,27 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
@@ -65,11 +65,11 @@ index 60bcdce..93211da 100644
 +  {
      if (KDIonContext::sharedContext()->zoomEnabled) {
        bool changedZoom = true;
- 
+
 @@ -237,65 +221,14 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
    return didProcessEvent || alphaLockWantsRedraw;
  }
- 
+
 -// List of keys that are used to switch between apps, in order of app to go (eg. 0 : First App, 1 : Second App, 2 : Third App, ...)
 -static constexpr Ion::Events::Event switch_events[] = {
 -    Ion::Events::ShiftSeven, Ion::Events::ShiftEight, Ion::Events::ShiftNine,
@@ -95,9 +95,8 @@ index 60bcdce..93211da 100644
 -      // If the USB isn't plugged in USBPlug event, we disable USB
 -      Ion::USB::disable();
 -    }
-+  if (event == Ion::Events::USBPlug || event == Ion::Events::USBEnumeration) {
-     return true;
-   }
+-    return true;
+-  }
 -  // If key home or key back is pressed, we switch to the home app.
 -  if (event == Ion::Events::Home || event == Ion::Events::Back) {
 -    switchTo(appSnapshotAtIndex(0));
@@ -106,10 +105,8 @@ index 60bcdce..93211da 100644
 -  // If shift + Home are pressed, we switch to the first app.
 -  if (event == Ion::Events::ShiftHome) {
 -    switchTo(appSnapshotAtIndex(1));
--    return true;
-+  if (s_activeApp->snapshot() != usbConnectedAppSnapshot() &&
-+      (event == Ion::Events::Home || event == Ion::Events::Back)) {
-+    return switchTo(appSnapshotAtIndex(0));
++  if (event == Ion::Events::USBPlug || event == Ion::Events::USBEnumeration) {
+     return true;
    }
 -
 -  // Iterate through the switch events to find the one that matches the event, if one match, switch to the app at the index of the switch event.
@@ -119,7 +116,10 @@ index 60bcdce..93211da 100644
 -      switchTo(appSnapshotAtIndex(i+1));
 -      return true;
 -    }
--  }
++  if (s_activeApp->snapshot() != usbConnectedAppSnapshot() &&
++      (event == Ion::Events::Home || event == Ion::Events::Back)) {
++    return switchTo(appSnapshotAtIndex(0));
+   }
 -
 -  // Add EE shortcut to go to the settings (app number 12)
 -  if (event == Ion::Events::EE) {
@@ -136,32 +136,13 @@ index 60bcdce..93211da 100644
    // If the event is the OnOff key, we suspend the calculator.
    if (event == Ion::Events::OnOff) {
      suspend(true);
-@@ -325,7 +258,7 @@ bool AppsContainer::switchTo(App::Snapshot * snapshot) {
-   if (s_activeApp && snapshot != s_activeApp->snapshot()) {
-     resetShiftAlphaStatus();
-   }
--  if (snapshot == hardwareTestAppSnapshot() || snapshot == onBoardingAppSnapshot()) {
-+  if (snapshot == homeAppSnapshot() || snapshot == hardwareTestAppSnapshot() || snapshot == onBoardingAppSnapshot()) {
-     m_window.hideTitleBarView(true);
-   } else {
-     m_window.hideTitleBarView(false);
-@@ -402,6 +335,9 @@ bool AppsContainer::updateBatteryState() {
-   bool pluggedStateUpdated = m_window.updatePluggedState();
-   bool chargingStateUpdated = m_window.updateIsChargingState();
-   if (batteryLevelUpdated || pluggedStateUpdated || chargingStateUpdated) {
-+    if (s_activeApp && s_activeApp->snapshot() == homeAppSnapshot()) {
-+      m_window.redraw(true);
-+    }
-     return true;
-   }
-   return false;
 diff --git a/apps/apps_container.h b/apps/apps_container.h
 index 485c5ce..2a306af 100644
 --- a/apps/apps_container.h
 +++ b/apps/apps_container.h
 @@ -2,6 +2,7 @@
  #define APPS_CONTAINER_H
- 
+
  #include "home/app.h"
 +#include "usb_connection.h"
  #include "on_boarding/app.h"
@@ -187,6 +168,44 @@ index ce36dc5..9da196b 100644
 -  return appSnapshotAtIndex(numberOfApps() == 2 ? 1 : 0);
 +  return appSnapshotAtIndex(0);
  }
+diff --git a/apps/home/base.en.i18n b/apps/home/base.en.i18n
+index 2a65458..dfcfb36 100644
+--- a/apps/home/base.en.i18n
++++ b/apps/home/base.en.i18n
+@@ -1,4 +1,4 @@
+ Apps = "Applications"
+-AppsCapital = "UPSILON"
++AppsCapital = "AOS v0.3.2"
+ ForbiddenAppInExamMode1 = "This application is"
+ ForbiddenAppInExamMode2 = "forbidden in exam mode"
+diff --git a/apps/home/controller.cpp b/apps/home/controller.cpp
+index cd98010..ce9dfbb 100644
+--- a/apps/home/controller.cpp
++++ b/apps/home/controller.cpp
+@@ -126,7 +126,10 @@ bool Controller::handleEvent(Ion::Events::Event event) {
+       }
+     } else {
+ #endif
+-    ::App::Snapshot * selectedSnapshot = container->appSnapshotAtIndex(index);
++    if (index <= 0 || index >= container->numberOfApps()) {
++      return false;
++    }
++    ::App::Snapshot * selectedSnapshot = container->appSnapshotAtIndex(PermutedAppSnapshotIndex(index));
+     if (ExamModeConfiguration::appIsForbiddenInExamMode(selectedSnapshot->descriptor()->examinationLevel(), GlobalPreferences::sharedGlobalPreferences()->examMode())) {
+       App::app()->displayWarning(I18n::Message::ForbiddenAppInExamMode1, I18n::Message::ForbiddenAppInExamMode2);
+     } else {
+@@ -292,8 +295,9 @@ void Controller::tableViewDidChangeSelection(SelectableTableView * t, int previo
+    * stay on a unvisible cell and to initialize the first cell on a visible one
+    * (so the previous one is always visible). */
+   int appIndex = (t->selectedColumn()+t->selectedRow()*k_numberOfColumns)+1;
+-  if (appIndex >= this->numberOfIcons()+1) {
+-    t->selectCellAtLocation((this->numberOfIcons()%k_numberOfColumns)-1, (this->numberOfIcons() / k_numberOfColumns));
++  if (appIndex > numberOfIcons() && numberOfIcons() > 0) {
++    const int last = numberOfIcons() - 1;
++    t->selectCellAtLocation(last % k_numberOfColumns, last / k_numberOfColumns);
+   }
+ }
+
 diff --git a/apps/usb/base.en.i18n b/apps/usb/base.en.i18n
 index 5b247cf..05a5f1e 100644
 --- a/apps/usb/base.en.i18n
@@ -211,7 +230,7 @@ index 8d31385..283d66e 100644
  #include <assert.h>
 -#include "apps/apps_container_storage.h"
 +
- 
+
  #ifndef PATCH_LEVEL
  #error This file expects PATCH_LEVEL to be defined
 @@ -123,10 +123,10 @@ const UserlandHeader __attribute__((section(".userland_header"), used)) k_userla
@@ -228,3 +247,24 @@ index 8d31385..283d66e 100644
    #endif
    .m_footer = Magic,
    .m_omegaMagicHeader = OmegaMagic,
+diff --git a/themes/themes/local/upsilon_light.json b/themes/themes/local/upsilon_light.json
+index 68aaf85..1043ab4 100644
+--- a/themes/themes/local/upsilon_light.json
++++ b/themes/themes/local/upsilon_light.json
+@@ -121,11 +121,11 @@
+             "SecondText": "000000"
+         },
+         "Home": {
+-            "Background": "ffffff",
+-            "CellBackground": "ffffff",
+-            "CellBackgroundActive": "4a4a4a",
+-            "CellText": "000000",
+-            "CellTextActive": "ffffff",
++            "Background": "121920",
++            "CellBackground": "121920",
++            "CellBackgroundActive": "82edd6",
++            "CellText": "f2f6f7",
++            "CellTextActive": "121920",
+             "CellTextExternal": "008f87",
+             "CellTextExternalActive": "6fe6df"
+         },

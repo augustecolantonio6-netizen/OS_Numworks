@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-upstream="$root/.build/upsilon-calculation"
+upstream="$root/.build/upsilon-launcher"
 revision=539b90a9a8aaf3db9451da13505f938116650f14
 
 if [[ ! -e "$upstream/.git" ]]; then
@@ -21,7 +21,6 @@ patch_file="$root/tools/upsilon-aos.patch"
 if ! git -C "$upstream" apply --reverse --check "$patch_file" 2>/dev/null; then
   git -C "$upstream" apply "$patch_file"
 fi
-cp "$root"/src/home/controller.{h,cpp} "$upstream/apps/home/"
 cp "$root/src/usb_connection.h" "$upstream/apps/"
 
 make -C "$upstream" -j"${JOBS:-4}" MODEL=bootloader EPSILON_APPS=calculation \
