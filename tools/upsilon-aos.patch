@@ -200,13 +200,13 @@ index ce36dc5..9da196b 100644
 +  return appSnapshotAtIndex(0);
  }
 diff --git a/apps/home/base.en.i18n b/apps/home/base.en.i18n
-index 2a65458..1332540 100644
+index 2a65458..ec91c8d 100644
 --- a/apps/home/base.en.i18n
 +++ b/apps/home/base.en.i18n
 @@ -1,4 +1,4 @@
  Apps = "Applications"
 -AppsCapital = "UPSILON"
-+AppsCapital = "AOS v0.4.0"
++AppsCapital = "AOS v0.4.1"
  ForbiddenAppInExamMode1 = "This application is"
  ForbiddenAppInExamMode2 = "forbidden in exam mode"
 diff --git a/apps/home/controller.cpp b/apps/home/controller.cpp
@@ -331,3 +331,17 @@ index 68aaf85..1043ab4 100644
              "CellTextExternal": "008f87",
              "CellTextExternalActive": "6fe6df"
          },
+diff --git a/ion/src/device/shared/usb/dfu_interface.cpp b/ion/src/device/shared/usb/dfu_interface.cpp
+index 2b56a2e..465c388 100644
+--- a/ion/src/device/shared/usb/dfu_interface.cpp
++++ b/ion/src/device/shared/usb/dfu_interface.cpp
+@@ -231,2 +231,3 @@ void DFUInterface::writeOnMemory() {
+   } else if (Flash::SectorAtAddress(m_writeAddress) >= 0) {
++    willErase();
+     Flash::WriteMemory(reinterpret_cast<uint8_t *>(m_writeAddress), m_largeBuffer, m_largeBufferLength);
+@@ -279,3 +280,4 @@ bool DFUInterface::dfuAbort(uint16_t * transferBufferLength) {
+ void DFUInterface::leaveDFUAndReset() {
+-  m_device->setResetOnDisconnect(true);
++  // Closing a RAM-only transfer must return to the running app.
++  m_device->setResetOnDisconnect(m_isErasingAndWriting);
+   m_device->detach();
