@@ -200,13 +200,13 @@ index ce36dc5..9da196b 100644
 +  return appSnapshotAtIndex(0);
  }
 diff --git a/apps/home/base.en.i18n b/apps/home/base.en.i18n
-index 2a65458..0ed3597 100644
+index 2a65458..1332540 100644
 --- a/apps/home/base.en.i18n
 +++ b/apps/home/base.en.i18n
 @@ -1,4 +1,4 @@
  Apps = "Applications"
 -AppsCapital = "UPSILON"
-+AppsCapital = "AOS v0.3.3"
++AppsCapital = "AOS v0.3.4"
  ForbiddenAppInExamMode1 = "This application is"
  ForbiddenAppInExamMode2 = "forbidden in exam mode"
 diff --git a/apps/home/controller.cpp b/apps/home/controller.cpp
@@ -278,6 +278,38 @@ index 8d31385..283d66e 100644
    #endif
    .m_footer = Magic,
    .m_omegaMagicHeader = OmegaMagic,
+diff --git a/ion/src/device/shared/usb/calculator.cpp b/ion/src/device/shared/usb/calculator.cpp
+index 73d6bf5..b37a51c 100644
+--- a/ion/src/device/shared/usb/calculator.cpp
++++ b/ion/src/device/shared/usb/calculator.cpp
+@@ -20,15 +20,23 @@ void Calculator::PollAndReset(bool exitWithKeyboard) {
+
+   Ion::Device::Keyboard::activateRow(exitKeyRow);
+
+-  while (!(exitWithKeyboard && !c.isErasingAndWriting() && Ion::Device::Keyboard::columnIsActive(exitKeyColumn)) &&
+-      Ion::USB::isPlugged() &&
+-      !c.isSoftDisconnected()) {
++  bool leftWithBack = false;
++  while (true) {
++    if (exitWithKeyboard && !c.isErasingAndWriting() &&
++        Ion::Device::Keyboard::columnIsActive(exitKeyColumn)) {
++      leftWithBack = true;
++      break;
++    }
++    if (!Ion::USB::isPlugged() || c.isSoftDisconnected()) {
++      break;
++    }
+     c.poll();
+   }
+   if (!c.isSoftDisconnected()) {
+     c.detach();
+   }
+-  if (c.resetOnDisconnect()) {
++  // Back cancels the USB session even if the host also requested a reset.
++  if (!leftWithBack && c.resetOnDisconnect()) {
+     c.leave(c.addressPointer());
+   }
+ }
 diff --git a/themes/themes/local/upsilon_light.json b/themes/themes/local/upsilon_light.json
 index 68aaf85..1043ab4 100644
 --- a/themes/themes/local/upsilon_light.json
