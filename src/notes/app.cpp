@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <apps/i18n.h>
+#include <apps/apps_container.h>
 #include <apps/notes/notes_icon.h>
 #include <ion/unicode/utf8_helper.h>
 #include <string.h>
@@ -64,11 +65,12 @@ void Controller::Content::refresh() {
 }
 
 int Controller::Content::numberOfSubviews() const {
-  return m_owner->m_screen == Screen::List || m_owner->m_screen == Screen::Options ? 0 : 1;
+  const auto screen = m_owner->m_screen;
+  return screen == Screen::Edit || screen == Screen::Rename || screen == Screen::Locked ? 1 : 0;
 }
 
 View *Controller::Content::subviewAtIndex(int) {
-  if (m_owner->m_screen == Screen::Rename) {
+  if (m_owner->m_screen == Screen::Rename || m_owner->m_screen == Screen::Locked) {
     return &name;
   }
   return &area;
@@ -78,7 +80,7 @@ void Controller::Content::layoutSubviews(bool force) {
   if (m_owner->m_screen == Screen::Edit) {
     area.setFrame(KDRect(8, Header + 6, bounds().width() - 16,
                          std::max(0, bounds().height() - Header - Footer - 12)), force);
-  } else if (m_owner->m_screen == Screen::Rename) {
+  } else if (m_owner->m_screen == Screen::Rename || m_owner->m_screen == Screen::Locked) {
     name.setFrame(KDRect(13, 69, bounds().width() - 26, 30), force);
   }
 }
@@ -95,7 +97,7 @@ void Controller::Content::drawRect(KDContext *ctx, KDRect) const {
   ctx->fillRect(KDRect(0, bottom, width, Footer), bar);
 
   const auto screen = m_owner->m_screen;
-  draw(ctx, screen == Screen::List ? "Mes notes" : m_owner->m_name, KDPoint(10, 5), bar);
+  draw(ctx, screen == Screen::Locked ? "Notes" : screen == Screen::List ? "Mes notes" : m_owner->m_name, KDPoint(10, 5), bar);
   const char *hint = "OK Ouvrir     > Options";
   if (screen == Screen::List) {
     int count = 0;
@@ -128,15 +130,31 @@ void Controller::Content::drawRect(KDContext *ctx, KDRect) const {
       ctx->fillRect(KDRect(width - 3, y, 3, length), accent);
     }
   } else if (screen == Screen::Options) {
-    ctx->fillRect(KDRect(0, Header, width, Row), selected);
-    ctx->fillRect(KDRect(0, Header, 3, Row), accent);
-    draw(ctx, "Renommer", KDPoint(11, Header + 4), selected, Palette::PrimaryText, KDFont::LargeFont);
+    for (int row = 0; row < 2; ++row) {
+      const bool active = row == m_owner->m_deleteSelected;
+      const int y = Header + row * Row;
+      const KDColor color = active ? selected : background;
+      ctx->fillRect(KDRect(0, y, width, Row), color);
+      if (active) {
+        ctx->fillRect(KDRect(0, y, 3, Row), accent);
+      }
+      draw(ctx, row == 0 ? "Renommer" : "Supprimer", KDPoint(11, y + 4),
+           color, Palette::PrimaryText, KDFont::LargeFont);
+    }
     hint = "OK Valider    BACK Retour";
-  } else if (screen == Screen::Rename) {
-    draw(ctx, "Nouveau nom", KDPoint(12, 48), background, Palette::PrimaryText, KDFont::LargeFont);
+  } else if (screen == Screen::ConfirmDelete) {
+    draw(ctx, "Supprimer cette note ?", KDPoint(12, 48), background,
+         Palette::PrimaryText, KDFont::LargeFont);
+    hint = "OK Supprimer    BACK Annuler";
+  } else if (screen == Screen::Rename || screen == Screen::Locked) {
+    const bool locked = screen == Screen::Locked;
+    draw(ctx, locked ? "Mot de passe" : "Nouveau nom", KDPoint(12, 48),
+         background, Palette::PrimaryText, KDFont::LargeFont);
     ctx->strokeRect(KDRect(12, 68, width - 24, 32), accent);
-    draw(ctx, "Minuscules, chiffres et _", KDPoint(12, 106), background, Palette::SecondaryText);
-    hint = "OK Valider    BACK Retour";
+    if (!locked) {
+      draw(ctx, "Minuscules, chiffres et _", KDPoint(12, 106), background, Palette::SecondaryText);
+    }
+    hint = locked ? "OK Valider   HOME Quitter" : "OK Valider    BACK Retour";
   } else {
     hint = "EXE Nouvelle ligne    OK Enregistrer";
   }
@@ -189,7 +207,11 @@ void Controller::failed(const char *status) {
 void Controller::didBecomeFirstResponder() {
   if (m_screen == Screen::Edit) {
     Container::activeApp()->setFirstResponder(&m_view.area);
-  } else if (m_screen == Screen::Rename) {
+  } else if (m_screen == Screen::Rename || m_screen == Screen::Locked) {
+    if (m_screen == Screen::Locked) {
+      m_view.name.reinitDraftTextBuffer();
+      AppsContainer::sharedAppsContainer()->setShiftAlphaStatus(Ion::Events::ShiftAlphaStatus::AlphaLock);
+    }
     m_view.name.setEditing(true);
     Container::activeApp()->setFirstResponder(&m_view.name);
   }
@@ -281,8 +303,30 @@ bool Controller::handleEvent(Ion::Events::Event event) {
     }
     return false;
   }
-  if (m_screen == Screen::Options) {
+  if (m_screen == Screen::ConfirmDelete) {
     if (event == OK || event == EXE) {
+      m_record.destroy();
+      m_record = {};
+      show(Screen::List);
+      return true;
+    }
+    if (event == Back || event == Left) {
+      show(Screen::Options);
+      return true;
+    }
+    return false;
+  }
+  if (m_screen == Screen::Options) {
+    if (event == Up || event == Down) {
+      m_deleteSelected = event == Down;
+      m_view.refresh();
+      return true;
+    }
+    if (event == OK || event == EXE) {
+      if (m_deleteSelected) {
+        show(Screen::ConfirmDelete);
+        return true;
+      }
       m_view.name.setText(m_name);
       show(Screen::Rename);
       m_view.name.setText(m_name);
@@ -319,6 +363,7 @@ bool Controller::handleEvent(Ion::Events::Event event) {
     memcpy(m_name, filename + PrefixLength, length);
     m_name[length] = 0;
     m_record = record;
+    m_deleteSelected = false;
     show(Screen::Options);
   } else {
     open(record);
@@ -330,7 +375,28 @@ bool Controller::textFieldShouldFinishEditing(TextField *, Ion::Events::Event ev
   return event == Ion::Events::OK || event == Ion::Events::EXE;
 }
 
-bool Controller::textFieldDidFinishEditing(TextField *, const char *text, Ion::Events::Event) {
+bool Controller::textFieldDidReceiveEvent(TextField *field, Ion::Events::Event event) {
+  if (m_screen == Screen::Locked && event == Ion::Events::Back) {
+    field->setText("");
+    failed(nullptr);
+    return true;
+  }
+  return false;
+}
+
+bool Controller::textFieldDidFinishEditing(TextField *field, const char *text, Ion::Events::Event) {
+  if (m_screen == Screen::Locked) {
+    if (strcmp(text, "casio") != 0) {
+      field->reinitDraftTextBuffer();
+      field->setCursorLocation(field->draftTextBuffer());
+      field->resetSelection();
+      failed("Mot de passe incorrect");
+      return false;
+    }
+    AppsContainer::sharedAppsContainer()->setShiftAlphaStatus(Ion::Events::ShiftAlphaStatus::Default);
+    show(Screen::List);
+    return true;
+  }
   if (!validName(text)) {
     failed("Nom invalide");
     return false;
@@ -354,7 +420,7 @@ bool Controller::textFieldDidFinishEditing(TextField *, const char *text, Ion::E
 }
 
 bool Controller::textFieldDidAbortEditing(TextField *) {
-  show(Screen::Options);
+  show(m_screen == Screen::Locked ? Screen::Locked : Screen::Options);
   return true;
 }
 

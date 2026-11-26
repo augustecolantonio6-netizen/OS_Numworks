@@ -26,7 +26,7 @@ public:
   bool textFieldDidAbortEditing(TextField *) override;
 
 private:
-  enum class Screen { List, Options, Rename, Edit };
+  enum class Screen { List, Options, Rename, ConfirmDelete, Edit };
   using Record = Ion::Storage::Record;
   static constexpr int MaxName = 24;
   static constexpr int VisibleScripts = 6;
@@ -79,6 +79,7 @@ private:
   Screen m_screen = Screen::List;
   const char *m_status = nullptr;
   int m_selected = 0;
+  bool m_deleteSelected = false;
   int m_first = 0;
   int m_line = 0;
   int m_lines = 0;

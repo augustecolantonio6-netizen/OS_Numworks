@@ -235,12 +235,22 @@ void Editor::Content::drawEditor(KDContext *ctx) const {
 void Editor::Content::drawOptions(KDContext *ctx) const {
   label(ctx, m_editor->m_script, KDPoint(10, 5), Palette::PrimaryText, Palette::BackgroundAppsSecondary);
   if (m_editor->m_screen == Screen::Options) {
-    ctx->fillRect(KDRect(0, HeaderHeight + 4, bounds().width(), 31), Palette::ListCellBackgroundSelected);
-    ctx->fillRect(KDRect(0, HeaderHeight + 4, 3, 31), Palette::AccentText);
-    label(ctx, "Renommer", KDPoint(10, HeaderHeight + 10), Palette::PrimaryText,
-          Palette::ListCellBackgroundSelected, KDFont::LargeFont);
-    label(ctx, ">", KDPoint(bounds().width() - 17, HeaderHeight + 11), Palette::AccentText,
-          Palette::ListCellBackgroundSelected);
+    for (int row = 0; row < 2; ++row) {
+      const bool active = row == m_editor->m_deleteSelected;
+      const KDCoordinate y = HeaderHeight + row * ListRowHeight;
+      const KDColor color = active ? Palette::ListCellBackgroundSelected : Palette::BackgroundHard;
+      ctx->fillRect(KDRect(0, y, bounds().width(), ListRowHeight), color);
+      if (active) {
+        ctx->fillRect(KDRect(0, y, 3, ListRowHeight), Palette::AccentText);
+      }
+      label(ctx, row == 0 ? "Renommer" : "Supprimer", KDPoint(10, y + 4),
+            Palette::PrimaryText, color, KDFont::LargeFont);
+    }
+    return;
+  }
+  if (m_editor->m_screen == Screen::ConfirmDelete) {
+    label(ctx, "Supprimer ce script ?", KDPoint(12, 48),
+          Palette::PrimaryText, Palette::BackgroundHard, KDFont::LargeFont);
     return;
   }
   label(ctx, "Nouveau nom", KDPoint(12, 47), Palette::PrimaryText, Palette::BackgroundHard, KDFont::LargeFont);
@@ -258,6 +268,7 @@ void Editor::Content::drawRect(KDContext *ctx, KDRect) const {
   switch (m_editor->m_screen) {
     case Screen::List: drawList(ctx); break;
     case Screen::Edit: drawEditor(ctx); break;
+    case Screen::ConfirmDelete:
     case Screen::Options:
     case Screen::Rename: drawOptions(ctx); break;
   }
@@ -273,6 +284,10 @@ void Editor::Content::drawRect(KDContext *ctx, KDRect) const {
     case Screen::Edit:
       keyHint(ctx, "EXE", "Ligne suivante", 8, footer + 3);
       keyHint(ctx, "SHIFT", "Haut / Bas", 169, footer + 3);
+      break;
+    case Screen::ConfirmDelete:
+      keyHint(ctx, "OK", "Supprimer", 8, footer + 3);
+      keyHint(ctx, "BACK", "Annuler", 115, footer + 3);
       break;
     case Screen::Options:
     case Screen::Rename:
@@ -444,9 +459,40 @@ bool Editor::textFieldDidAbortEditing(TextField *) {
 }
 
 bool Editor::handleEvent(Ion::Events::Event event) {
-  if (m_screen == Screen::Options) {
+  if (m_screen == Screen::ConfirmDelete) {
     if (event == Ion::Events::OK || event == Ion::Events::EXE) {
-      renameScript();
+      // Re-resolve the source after removing its export, which compacts storage.
+      auto exportFile = lookup(m_script, ExportExtension);
+      if (!exportFile.isNull()) {
+        exportFile.destroy();
+      }
+      auto source = lookup(m_script, SourceExtension);
+      if (!source.isNull()) {
+        source.destroy();
+      }
+      transition(Screen::List, nullptr);
+      return true;
+    }
+    if (event == Ion::Events::Back || event == Ion::Events::Left) {
+      transition(Screen::Options, nullptr);
+      return true;
+    }
+    return false;
+  }
+  if (m_screen == Screen::Options) {
+    if (event == Ion::Events::Up || event == Ion::Events::Down) {
+      m_deleteSelected = event == Ion::Events::Down;
+      m_content.refresh();
+      return true;
+    }
+    if (event == Ion::Events::OK || event == Ion::Events::EXE) {
+      if (m_deleteSelected) {
+        transition(Screen::ConfirmDelete, nullptr);
+      } else if (!lookup(m_script, SourceExtension).isNull()) {
+        renameScript();
+      } else {
+        transition(Screen::Options, "Ancien export sans source");
+      }
       return true;
     }
     if (event == Ion::Events::Back) {
@@ -471,7 +517,8 @@ bool Editor::handleEvent(Ion::Events::Event event) {
       if (event != Ion::Events::Right) createScript();
     } else {
       scriptName(record, m_script);
-      if (event == Ion::Events::Right && !lookup(m_script, SourceExtension).isNull()) {
+      if (event == Ion::Events::Right) {
+        m_deleteSelected = false;
         transition(Screen::Options, nullptr);
       } else {
         openScript();

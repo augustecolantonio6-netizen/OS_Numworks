@@ -15,12 +15,12 @@ public:
   bool save();
 
   bool textFieldShouldFinishEditing(TextField *, Ion::Events::Event event) override;
-  bool textFieldDidReceiveEvent(TextField *, Ion::Events::Event) override { return false; }
+  bool textFieldDidReceiveEvent(TextField *, Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(TextField *, const char *text, Ion::Events::Event) override;
   bool textFieldDidAbortEditing(TextField *) override;
 
 private:
-  enum class Screen { List, Options, Rename, Edit };
+  enum class Screen { Locked, List, Options, Rename, ConfirmDelete, Edit };
   using Record = Ion::Storage::Record;
   static constexpr int MaxName = 24;
   static constexpr int MaxText = 3000;
@@ -64,8 +64,9 @@ private:
   void show(Screen screen, const char *status = nullptr);
   void failed(const char *status);
 
-  Screen m_screen = Screen::List;
+  Screen m_screen = Screen::Locked;
   int m_selected = 0;
+  bool m_deleteSelected = false;
   int m_first = 0;
   const char *m_status = nullptr;
   Record m_record;
