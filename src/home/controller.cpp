@@ -53,6 +53,7 @@ void Controller::ContentView::drawRect(KDContext *ctx, KDRect) const {
   ctx->fillRect(KDRect(0, 0, bounds().width(), 2), Accent);
   ctx->drawString("AOS", KDPoint(16, 15), KDFont::LargeFont, Accent, Background);
   ctx->drawString("Auguste OS", KDPoint(56, 17), KDFont::SmallFont, Muted, Background);
+  ctx->drawString("v0.3.1", KDPoint(210, 17), KDFont::SmallFont, Muted, Background);
   ctx->fillRect(KDRect(16, 46, 288, 1), Edge);
   drawBattery(*ctx, readBattery());
   ctx->drawString("Applications", KDPoint(16, 58), KDFont::SmallFont, Text, Background);

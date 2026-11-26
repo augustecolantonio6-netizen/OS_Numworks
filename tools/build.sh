@@ -5,7 +5,7 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 upstream="$root/.build/upsilon-calculation"
 revision=539b90a9a8aaf3db9451da13505f938116650f14
 
-if [[ ! -d "$upstream/.git" ]]; then
+if [[ ! -e "$upstream/.git" ]]; then
   git init -q "$upstream"
   git -C "$upstream" remote add origin https://github.com/UpsilonNumworks/Upsilon.git
 fi
