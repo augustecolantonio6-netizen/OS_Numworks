@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-upstream="$root/.build/upsilon"
+upstream="$root/.build/upsilon-calculation"
 revision=539b90a9a8aaf3db9451da13505f938116650f14
 
 if [[ ! -d "$upstream/.git" ]]; then
@@ -16,26 +16,16 @@ if [[ $(git -C "$upstream" rev-parse --verify HEAD 2>/dev/null || true) != "$rev
   git -C "$upstream" checkout --detach "$revision"
 fi
 
-mkdir -p "$upstream/aos" "$root/dist"
-cp "$root"/src/* "$upstream/aos/"
+mkdir -p "$root/dist"
+patch_file="$root/tools/upsilon-aos.patch"
+if ! git -C "$upstream" apply --reverse --check "$patch_file" 2>/dev/null; then
+  git -C "$upstream" apply "$patch_file"
+fi
+cp "$root"/src/home/controller.{h,cpp} "$upstream/apps/home/"
+cp "$root/src/usb_connection.h" "$upstream/apps/"
 
-# The app container header is only used for Upsilon's external-app heap.
-# AOS disables it, so this include would only pull in unrelated dependencies.
-sed -i '/^#include "apps\/apps_container_storage\.h"$/d' \
-  "$upstream/ion/src/device/bootloader/platform_info.cpp"
-sed -i -E \
-  -e "s/(m_externalAppsFlashStart = )0xFFFFFFFF,/\\1reinterpret_cast<uint32_t *>(0xFFFFFFFFu),/" \
-  -e "s/(m_externalAppsRAM(Start|End) = )0xFFFFFFFF,/\\1reinterpret_cast<const uint8_t *>(0xFFFFFFFFu),/" \
-  "$upstream/ion/src/device/bootloader/platform_info.cpp"
-
-usb_sources='apps/usb/usb_connected_controller.cpp apps/battery_view.cpp
-escher/src/view.cpp escher/src/window.cpp escher/src/text_view.cpp
-escher/src/message_text_view.cpp escher/src/view_controller.cpp escher/src/responder.cpp
-escher/src/transparent_view.cpp escher/src/palette.cpp'
-
-make -C "$upstream" -f Makefile -f "$root/tools/device.mk" -j"${JOBS:-4}" MODEL=bootloader EPSILON_APPS= apps_src= \
+make -C "$upstream" -j"${JOBS:-4}" MODEL=bootloader EPSILON_APPS=calculation \
   EPSILON_I18N=en HOME_DISPLAY_EXTERNALS= INCLUDE_ULAB=0 OMEGA_USERNAME=AOS \
-  'epsilon_src=$(ion_src) $(liba_src) $(libaxx_src) $(default_kandinsky_src) aos/main.cpp aos/launcher.cpp aos/usb_screen.cpp '"${usb_sources//$'\n'/ }" \
   epsilon.A.bin epsilon.B.bin
 
 output="$upstream/output/release/device/bootloader"

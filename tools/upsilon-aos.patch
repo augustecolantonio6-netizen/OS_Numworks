@@ -1,0 +1,230 @@
+diff --git a/apps/apps_container.cpp b/apps/apps_container.cpp
+index 60bcdce..93211da 100644
+--- a/apps/apps_container.cpp
++++ b/apps/apps_container.cpp
+@@ -152,43 +152,27 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
+     Ion::LED::updateColorWithPlugAndCharge();
+   }
+   if (event == Ion::Events::USBEnumeration) {
+-    if (Ion::USB::isPlugged()) {
+-      App::Snapshot * activeSnapshot = (s_activeApp == nullptr ? appSnapshotAtIndex(0) : s_activeApp->snapshot());
+-      /* Just after a software update, the battery timer does not have time to
+-       * fire before the calculator enters DFU mode. As the DFU mode blocks the
+-       * event loop, we update the battery state "manually" here.
+-       * We do it before switching to USB application to redraw the battery
+-       * pictogram. */
+-      updateBatteryState();
+-      if (GlobalPreferences::sharedGlobalPreferences()->isInExamMode()) {
+-        // If we are in exam mode, we don't switch to usb connected app
+-        didProcessEvent = true;
+-      } else if (switchTo(usbConnectedAppSnapshot())) {
+-        Ion::USB::DFU(true);
+-        // Update LED when exiting DFU mode
+-        Ion::LED::updateColorWithPlugAndCharge();
+-        bool switched = switchTo(activeSnapshot);
+-        assert(switched);
+-        (void) switched; // Silence compilation warning about unused variable.
+-        didProcessEvent = true;
+-      } else {
+-        /* We could not switch apps, which means that the current app needs
+-         * another event loop to prepare for being switched off.
+-         * Discard the current enumeration interruption.
+-         * The USB host tries a few times in a row to enumerate the device, so
+-         * hopefully the device will get another enumeration event soon and this
+-         * time the device will be ready to go in DFU mode. Otherwise, the user
+-         * needs to re-plug the device to go into DFU mode. */
+-        Ion::USB::clearEnumerationInterrupt();
+-      }
+-    } else {
+-      /* Sometimes, the device gets an ENUMDNE interrupts when being unplugged
+-       * from a non-USB communicating host (e.g. a USB charger). The interrupt
+-       * must me cleared: if not the next enumeration attempts will not be
+-       * detected. */
+-      Ion::USB::clearEnumerationInterrupt();
++    Ion::USB::clearEnumerationInterrupt();
++  }
++
++  const bool onUsbScreen = s_activeApp->snapshot() == usbConnectedAppSnapshot();
++  const bool dismissUsb = onUsbScreen && event == Ion::Events::Back;
++  m_usbConnection.update(Ion::USB::isPlugged(), dismissUsb);
++  if (onUsbScreen && !m_usbConnection.visible()) {
++    if (switchTo(m_beforeUsb)) {
++      m_beforeUsb = nullptr;
+     }
+-  } else {
++    return true;
++  }
++  if (!onUsbScreen && m_usbConnection.visible()) {
++    App::Snapshot *previous = s_activeApp->snapshot();
++    if (switchTo(usbConnectedAppSnapshot())) {
++      m_beforeUsb = previous;
++      return true;
++    }
++  }
++
++  {
+     if (KDIonContext::sharedContext()->zoomEnabled) {
+       bool changedZoom = true;
+ 
+@@ -237,65 +221,14 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
+   return didProcessEvent || alphaLockWantsRedraw;
+ }
+ 
+-// List of keys that are used to switch between apps, in order of app to go (eg. 0 : First App, 1 : Second App, 2 : Third App, ...)
+-static constexpr Ion::Events::Event switch_events[] = {
+-    Ion::Events::ShiftSeven, Ion::Events::ShiftEight, Ion::Events::ShiftNine,
+-    Ion::Events::ShiftFour, Ion::Events::ShiftFive, Ion::Events::ShiftSix,
+-    Ion::Events::ShiftOne, Ion::Events::ShiftTwo, Ion::Events::ShiftThree,
+-    Ion::Events::ShiftZero, Ion::Events::ShiftDot, Ion::Events::ShiftEE
+-};
+-
+ bool AppsContainer::processEvent(Ion::Events::Event event) {
+-  // Warning: if the window is dirtied, you need to call window()->redraw()
+-  if (event == Ion::Events::USBPlug) {
+-    if (Ion::USB::isPlugged()) {
+-      // If the exam mode is enabled, we ask to disable it, else, we enable USB
+-      if (GlobalPreferences::sharedGlobalPreferences()->isInExamMode()) {
+-        displayExamModePopUp(GlobalPreferences::ExamMode::Off);
+-        window()->redraw();
+-      } else {
+-        Ion::USB::enable();
+-      }
+-      // Update brightness when USB is plugged
+-      Ion::Backlight::setBrightness(GlobalPreferences::sharedGlobalPreferences()->brightnessLevel());
+-    } else {
+-      // If the USB isn't plugged in USBPlug event, we disable USB
+-      Ion::USB::disable();
+-    }
++  if (event == Ion::Events::USBPlug || event == Ion::Events::USBEnumeration) {
+     return true;
+   }
+-  // If key home or key back is pressed, we switch to the home app.
+-  if (event == Ion::Events::Home || event == Ion::Events::Back) {
+-    switchTo(appSnapshotAtIndex(0));
+-    return true;
+-  }
+-  // If shift + Home are pressed, we switch to the first app.
+-  if (event == Ion::Events::ShiftHome) {
+-    switchTo(appSnapshotAtIndex(1));
+-    return true;
++  if (s_activeApp->snapshot() != usbConnectedAppSnapshot() &&
++      (event == Ion::Events::Home || event == Ion::Events::Back)) {
++    return switchTo(appSnapshotAtIndex(0));
+   }
+-
+-  // Iterate through the switch events to find the one that matches the event, if one match, switch to the app at the index of the switch event.
+-  for(int i = 0; i < std::min((int) (sizeof(switch_events) / sizeof(Ion::Events::Event)), APPS_CONTAINER_SNAPSHOT_COUNT); i++) {
+-    if (event == switch_events[i]) {
+-      m_window.redraw(true);
+-      switchTo(appSnapshotAtIndex(i+1));
+-      return true;
+-    }
+-  }
+-
+-  // Add EE shortcut to go to the settings (app number 12)
+-  if (event == Ion::Events::EE) {
+-    switchTo(appSnapshotAtIndex(12));
+-    return true;
+-  }
+-
+-  // Add Shift + Ans shortcut to go to the previous app
+-  if (event == Ion::Events::ShiftAns) {
+-    switchTo(appSnapshotAtIndex(m_lastAppIndex));
+-    return true;
+-  }
+-
+   // If the event is the OnOff key, we suspend the calculator.
+   if (event == Ion::Events::OnOff) {
+     suspend(true);
+@@ -325,7 +258,7 @@ bool AppsContainer::switchTo(App::Snapshot * snapshot) {
+   if (s_activeApp && snapshot != s_activeApp->snapshot()) {
+     resetShiftAlphaStatus();
+   }
+-  if (snapshot == hardwareTestAppSnapshot() || snapshot == onBoardingAppSnapshot()) {
++  if (snapshot == homeAppSnapshot() || snapshot == hardwareTestAppSnapshot() || snapshot == onBoardingAppSnapshot()) {
+     m_window.hideTitleBarView(true);
+   } else {
+     m_window.hideTitleBarView(false);
+@@ -402,6 +335,9 @@ bool AppsContainer::updateBatteryState() {
+   bool pluggedStateUpdated = m_window.updatePluggedState();
+   bool chargingStateUpdated = m_window.updateIsChargingState();
+   if (batteryLevelUpdated || pluggedStateUpdated || chargingStateUpdated) {
++    if (s_activeApp && s_activeApp->snapshot() == homeAppSnapshot()) {
++      m_window.redraw(true);
++    }
+     return true;
+   }
+   return false;
+diff --git a/apps/apps_container.h b/apps/apps_container.h
+index 485c5ce..2a306af 100644
+--- a/apps/apps_container.h
++++ b/apps/apps_container.h
+@@ -2,6 +2,7 @@
+ #define APPS_CONTAINER_H
+ 
+ #include "home/app.h"
++#include "usb_connection.h"
+ #include "on_boarding/app.h"
+ #include "hardware_test/app.h"
+ #include "usb/app.h"
+@@ -92,6 +93,8 @@ private:
+   HardwareTest::App::Snapshot m_hardwareTestSnapshot;
+   USB::App::Snapshot m_usbConnectedSnapshot;
+   XNTLoop m_XNTLoop;
++  Aos::UsbConnection m_usbConnection;
++  App::Snapshot *m_beforeUsb = nullptr;
+   #ifdef EPSILON_GETOPT
+   App::Snapshot * m_startAppSnapshot;
+   #endif
+diff --git a/apps/apps_container_launch_default.cpp b/apps/apps_container_launch_default.cpp
+index ce36dc5..9da196b 100644
+--- a/apps/apps_container_launch_default.cpp
++++ b/apps/apps_container_launch_default.cpp
+@@ -3,5 +3,5 @@
+ App::Snapshot * AppsContainer::initialAppSnapshot() {
+   // The backlight has not been initialized
+   Ion::Backlight::init();
+-  return appSnapshotAtIndex(numberOfApps() == 2 ? 1 : 0);
++  return appSnapshotAtIndex(0);
+ }
+diff --git a/apps/usb/base.en.i18n b/apps/usb/base.en.i18n
+index 5b247cf..05a5f1e 100644
+--- a/apps/usb/base.en.i18n
++++ b/apps/usb/base.en.i18n
+@@ -1,7 +1,7 @@
+ USBConnected = "THE CALCULATOR IS CONNECTED"
+-ConnectedMessage1 = "To transfer data, browse"
+-ConnectedMessage2 = "our page from your computer"
+-ConnectedMessage3 = "yaya-cout.github.io/Upsilon-Workshop"
++ConnectedMessage1 = "The USB cable is connected."
++ConnectedMessage2 = ""
++ConnectedMessage3 = ""
+ ConnectedMessage4 = "Press the BACK key of your"
+ ConnectedMessage5 = "calculator or unplug it to"
+ ConnectedMessage6 = "disconnect it."
+diff --git a/ion/src/device/bootloader/platform_info.cpp b/ion/src/device/bootloader/platform_info.cpp
+index 8d31385..283d66e 100644
+--- a/ion/src/device/bootloader/platform_info.cpp
++++ b/ion/src/device/bootloader/platform_info.cpp
+@@ -1,6 +1,6 @@
+ #include <ion.h>
+ #include <assert.h>
+-#include "apps/apps_container_storage.h"
++
+ 
+ #ifndef PATCH_LEVEL
+ #error This file expects PATCH_LEVEL to be defined
+@@ -123,10 +123,10 @@ const UserlandHeader __attribute__((section(".userland_header"), used)) k_userla
+   .m_externalAppsRAMStart = externalAppsRAMStart,
+   .m_externalAppsRAMEnd = externalAppsRAMEnd,
+   #else
+-  .m_externalAppsFlashStart = 0xFFFFFFFF,
++  .m_externalAppsFlashStart = reinterpret_cast<uint32_t *>(0xFFFFFFFFu),
+   .m_externalAppsFlashEnd = 0xFFFFFFFF,
+-  .m_externalAppsRAMStart = 0xFFFFFFFF,
+-  .m_externalAppsRAMEnd = 0xFFFFFFFF,
++  .m_externalAppsRAMStart = reinterpret_cast<const uint8_t *>(0xFFFFFFFFu),
++  .m_externalAppsRAMEnd = reinterpret_cast<const uint8_t *>(0xFFFFFFFFu),
+   #endif
+   .m_footer = Magic,
+   .m_omegaMagicHeader = OmegaMagic,
