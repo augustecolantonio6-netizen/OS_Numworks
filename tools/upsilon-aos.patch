@@ -1,5 +1,5 @@
 diff --git a/apps/apps_container.cpp b/apps/apps_container.cpp
-index 60bcdce..36b5df4 100644
+index 60bcdce..9d121a2 100644
 --- a/apps/apps_container.cpp
 +++ b/apps/apps_container.cpp
 @@ -136,6 +136,10 @@ void AppsContainer::suspend(bool checkIfOnOffKeyReleased) {
@@ -13,7 +13,24 @@ index 60bcdce..36b5df4 100644
    /* Ion::Power::suspend() completely shuts down the LCD controller. Therefore
     * the frame memory is lost. That's why we need to force a window redraw
     * upon wakeup, otherwise the screen is filled with noise. */
-@@ -151,44 +155,54 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
+@@ -144,51 +148,71 @@ void AppsContainer::suspend(bool checkIfOnOffKeyReleased) {
+   window()->redraw(true);
+ }
+ 
++#if PLATFORM_DEVICE
++extern "C" void aos_diagnostic_event(uint32_t event, uint32_t app);
++#endif
++
+ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
++#if PLATFORM_DEVICE
++  if (event.isKeyboardEvent()) {
++    const int app = s_activeApp ? appIndexFromSnapshot(s_activeApp->snapshot()) : -1;
++    aos_diagnostic_event(static_cast<uint8_t>(event), static_cast<uint32_t>(app));
++  }
++#endif
+   bool alphaLockWantsRedraw = updateAlphaLock();
+   bool didProcessEvent = false;
+ 
    if (event == Ion::Events::USBEnumeration || event == Ion::Events::USBPlug || event == Ion::Events::BatteryCharging) {
      Ion::LED::updateColorWithPlugAndCharge();
    }
@@ -103,11 +120,11 @@ index 60bcdce..36b5df4 100644
 +  {
      if (KDIonContext::sharedContext()->zoomEnabled) {
        bool changedZoom = true;
-
-@@ -237,65 +251,14 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
+ 
+@@ -237,65 +261,14 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
    return didProcessEvent || alphaLockWantsRedraw;
  }
-
+ 
 -// List of keys that are used to switch between apps, in order of app to go (eg. 0 : First App, 1 : Second App, 2 : Third App, ...)
 -static constexpr Ion::Events::Event switch_events[] = {
 -    Ion::Events::ShiftSeven, Ion::Events::ShiftEight, Ion::Events::ShiftNine,
@@ -140,15 +157,15 @@ index 60bcdce..36b5df4 100644
 -  if (event == Ion::Events::Home || event == Ion::Events::Back) {
 -    switchTo(appSnapshotAtIndex(0));
 -    return true;
--  }
--  // If shift + Home are pressed, we switch to the first app.
--  if (event == Ion::Events::ShiftHome) {
--    switchTo(appSnapshotAtIndex(1));
--    return true;
 +  if (s_activeApp->snapshot() != usbConnectedAppSnapshot() &&
 +      (event == Ion::Events::Home || event == Ion::Events::Back)) {
 +    return switchTo(appSnapshotAtIndex(0));
    }
+-  // If shift + Home are pressed, we switch to the first app.
+-  if (event == Ion::Events::ShiftHome) {
+-    switchTo(appSnapshotAtIndex(1));
+-    return true;
+-  }
 -
 -  // Iterate through the switch events to find the one that matches the event, if one match, switch to the app at the index of the switch event.
 -  for(int i = 0; i < std::min((int) (sizeof(switch_events) / sizeof(Ion::Events::Event)), APPS_CONTAINER_SNAPSHOT_COUNT); i++) {
@@ -207,13 +224,13 @@ index ce36dc5..9da196b 100644
 +  return appSnapshotAtIndex(0);
  }
 diff --git a/apps/home/base.en.i18n b/apps/home/base.en.i18n
-index 2a65458..58e8be9 100644
+index 2a65458..723aedc 100644
 --- a/apps/home/base.en.i18n
 +++ b/apps/home/base.en.i18n
 @@ -1,4 +1,4 @@
  Apps = "Applications"
 -AppsCapital = "UPSILON"
-+AppsCapital = "AOS v0.5.1"
++AppsCapital = "AOS DIAG 0.5.1"
  ForbiddenAppInExamMode1 = "This application is"
  ForbiddenAppInExamMode2 = "forbidden in exam mode"
 diff --git a/apps/home/controller.cpp b/apps/home/controller.cpp
@@ -368,3 +385,131 @@ index 2b56a2e..465c388 100644
 +  // Closing a RAM-only transfer must return to the running app.
 +  m_device->setResetOnDisconnect(m_isErasingAndWriting);
    m_device->detach();
+diff --git a/ion/src/device/bootloader/boot/rt0.cpp b/ion/src/device/bootloader/boot/rt0.cpp
+index d45335a..9122aba 100644
+--- a/ion/src/device/bootloader/boot/rt0.cpp
++++ b/ion/src/device/bootloader/boot/rt0.cpp
+@@ -4,6 +4,8 @@
+ #include <ion/led.h>
+ #include <ion/storage.h>
+ #include <ion/internal_storage.h>
++#include <kandinsky/font.h>
++#include <kandinsky/ion_context.h>
+ #include <boot/isr.h>
+ #include <drivers/board.h>
+ #include <drivers/rtc.h>
+@@ -29,13 +31,80 @@ extern "C" {
+   extern char _isr_vector_table_end_ram;
+ }
+ 
+-void __attribute__((noinline)) abort() {
+-#ifdef NDEBUG
+-  Ion::Device::Reset::core();
+-#else
+-  while (1) {
++namespace {
++
++bool diagnosticReady = false;
++volatile uint32_t lastEvent = 0;
++volatile uint32_t lastApp = 0;
++
++void drawValue(KDRealIonContext &ctx, const char *label, uint32_t value, int row) {
++  constexpr char digits[] = "0123456789ABCDEF";
++  char number[] = "00000000";
++  for (int i = 7; i >= 0; --i) {
++    number[i] = digits[value & 15];
++    value >>= 4;
+   }
+-#endif
++  ctx.drawString(label, KDPoint(13, row), KDFont::SmallFont, KDColorWhite, KDColorBlack);
++  ctx.drawString(number, KDPoint(112, row), KDFont::SmallFont, KDColorWhite, KDColorBlack);
++}
++
++[[noreturn]] void showDiagnostic(const char *reason, uint32_t pc, uint32_t lr, uint32_t frame) {
++  if (diagnosticReady) {
++    diagnosticReady = false;
++    KDRealIonContext ctx;
++    ctx.fillRect(KDRect(0, 0, Ion::Display::Width, Ion::Display::Height), KDColorBlack);
++    ctx.drawString(reason, KDPoint(13, 13), KDFont::LargeFont, KDColorWhite, KDColorBlack);
++    const volatile uint32_t *scb = reinterpret_cast<const volatile uint32_t *>(0xE000ED28u);
++    drawValue(ctx, "PC", pc, 45);
++    drawValue(ctx, "LR", lr, 65);
++    drawValue(ctx, "CFSR", scb[0], 85);
++    drawValue(ctx, "HFSR", scb[1], 105);
++    drawValue(ctx, "SP", frame, 125);
++    drawValue(ctx, "App", lastApp, 145);
++    drawValue(ctx, "Event", lastEvent, 165);
++    ctx.drawString("Photo, puis ON/OFF", KDPoint(13, 199), KDFont::SmallFont, KDColorWhite, KDColorBlack);
++    while (Ion::Keyboard::scan().keyDown(Ion::Keyboard::Key::OnOff)) {}
++    while (!Ion::Keyboard::scan().keyDown(Ion::Keyboard::Key::OnOff)) {}
++  }
++  Ion::Device::Reset::core();
++  __builtin_unreachable();
++}
++
++}
++
++extern "C" void aos_diagnostic_event(uint32_t event, uint32_t app) {
++  lastEvent = event;
++  lastApp = app;
++}
++
++void __attribute__((noinline)) abort() {
++  auto address = reinterpret_cast<uintptr_t>(__builtin_return_address(0));
++  showDiagnostic("AOS diagnostic - abort", address, 0, 0);
++}
++
++// Use a separate stack so a bad application stack can still be reported.
++extern "C" {
++alignas(8) __attribute__((used)) uint8_t aos_diagnostic_stack[4096];
++
++[[noreturn, gnu::used]] void aos_report_fault(const uint32_t *frame, uint32_t exceptionReturn) {
++  auto frameAddress = reinterpret_cast<uintptr_t>(frame);
++  const bool valid = !(frameAddress & 3) && frameAddress >= 0x20000000u &&
++                     frameAddress <= 0x20040000u - 8 * sizeof(uint32_t);
++  showDiagnostic("AOS diagnostic - HardFault", valid ? frame[6] : 0,
++                 valid ? frame[5] : exceptionReturn, frameAddress);
++}
++
++__attribute__((naked)) void aos_hard_fault() {
++  asm volatile(
++    "tst lr, #4\n"
++    "ite eq\n"
++    "mrseq r0, msp\n"
++    "mrsne r0, psp\n"
++    "mov r1, lr\n"
++    "ldr r2, =aos_diagnostic_stack + 4096\n"
++    "msr msp, r2\n"
++    "b aos_report_fault\n");
++}
+ }
+ 
+ /* In order to ensure that this method is execute from the external flash, we
+@@ -48,6 +117,7 @@ static void __attribute__((noinline)) external_flash_start() {
+    * after the Power-On Self-Test if there is one or before switching to the
+    * home app otherwise. */
+   Ion::Device::Board::initPeripherals(false);
++  diagnosticReady = true;
+ 
+   return ion_main(0, nullptr);
+ }
+diff --git a/ion/src/device/shared/boot/isr.c b/ion/src/device/shared/boot/isr.c
+index d438308..b2fd0d3 100644
+--- a/ion/src/device/shared/boot/isr.c
++++ b/ion/src/device/shared/boot/isr.c
+@@ -1,5 +1,6 @@
+ #include "isr.h"
+ extern const void * _stack_start;
++void aos_hard_fault(void);
+ 
+ /* Interrupt Service Routines are void->void functions */
+ typedef void(*ISR)(void);
+@@ -19,7 +20,7 @@ ISR InitialisationVector[INITIALISATION_VECTOR_SIZE]
+   (ISR)&_stack_start, // Stack start
+   start, // Reset service routine,
+   0, // NMI service routine,
+-  abort, // HardFault service routine,
++  aos_hard_fault, // HardFault service routine,
+   0, // MemManage service routine,
+   0, // BusFault service routine,
+   0, // UsageFault service routine,
