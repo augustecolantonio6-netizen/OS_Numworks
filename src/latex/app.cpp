@@ -1,6 +1,7 @@
 #include "app.h"
 #include "serializer.h"
 
+#include <algorithm>
 #include <apps/apps_container.h>
 #include <apps/code/code_icon.h>
 #include <apps/i18n.h>
@@ -16,7 +17,27 @@ using Record = Ion::Storage::Record;
 constexpr char SourceExtension[] = "ltx";
 constexpr char ExportExtension[] = "py";
 constexpr char LegacyName[] = "aos_latex";
-constexpr KDColor Gutter = KDColor::RGB24(0xEDF0F3);
+constexpr KDCoordinate HeaderHeight = 24;
+constexpr KDCoordinate FooterHeight = 22;
+constexpr KDCoordinate ListRowHeight = 29;
+constexpr KDCoordinate NeighborHeight = 40;
+constexpr KDCoordinate GutterWidth = 34;
+
+void label(KDContext *ctx, const char *text, KDPoint origin,
+           KDColor color = Palette::PrimaryText, KDColor background = Palette::BackgroundHard,
+           const KDFont *font = KDFont::SmallFont) {
+  ctx->drawString(text, origin, font, color, background);
+}
+
+void keyHint(KDContext *ctx, const char *key, const char *action, KDCoordinate x, KDCoordinate y) {
+  const KDCoordinate width = KDFont::SmallFont->stringSize(key).width() + 8;
+  const KDRect button(x, y, width, 16);
+  ctx->fillRect(button, Palette::BackgroundHard);
+  ctx->strokeRect(button, Palette::ExpressionInputBorder);
+  label(ctx, key, KDPoint(x + 4, y + 1));
+  label(ctx, action, KDPoint(x + width + 5, y + 1),
+        Palette::SecondaryText, Palette::BackgroundAppsSecondary);
+}
 
 void numberText(unsigned number, char *out) {
   char reversed[10];
@@ -112,66 +133,153 @@ View *Editor::Content::subviewAtIndex(int index) {
   return views[index];
 }
 
-void Editor::Content::layoutSubviews(bool force) {
-  const auto width = bounds().width();
-  const auto height = bounds().height();
-  if (m_editor->m_screen == Screen::Edit) {
-    previous.setFrame(KDRect(29, 17, width - 34, 42), force);
-    field.setFrame(KDRect(29, 62, width - 34, height - 123), force);
-    next.setFrame(KDRect(29, height - 60, width - 34, 38), force);
-  } else if (m_editor->m_screen == Screen::Rename) {
-    name.setFrame(KDRect(12, 83, width - 24, 40), force);
+KDRect Editor::Content::rowFrame(int offset) const {
+  const KDCoordinate top = HeaderHeight;
+  const KDCoordinate bottom = bounds().height() - FooterHeight;
+  const bool showPrevious = m_editor->m_line > 0;
+  const bool showNext = m_editor->m_line < m_editor->m_lines;
+  const KDCoordinate activeTop = top + (showPrevious ? NeighborHeight : 0);
+  const KDCoordinate maxHeight = bottom - activeTop - (showNext ? NeighborHeight : 0);
+  const KDCoordinate activeHeight = std::min(maxHeight,
+    std::max<KDCoordinate>(34, field.minimalSizeForOptimalDisplay().height() + 12));
+  switch (offset) {
+    case -1: return showPrevious ? KDRect(0, top, bounds().width(), NeighborHeight) : KDRectZero;
+    case 1: return showNext ?
+      KDRect(0, activeTop + activeHeight, bounds().width(), NeighborHeight) : KDRectZero;
+    default: return KDRect(0, activeTop, bounds().width(), activeHeight);
   }
 }
 
-void Editor::Content::drawRect(KDContext *ctx, KDRect) const {
-  auto *editor = m_editor;
-  ctx->fillRect(bounds(), Palette::BackgroundHard);
-  const int width = bounds().width();
-  const int height = bounds().height();
-  auto label = [&](const char *text, int x, int y, KDColor background = Palette::BackgroundHard) {
-    ctx->drawString(text, KDPoint(x, y), KDFont::SmallFont, Palette::PrimaryText, background);
-  };
-  if (editor->m_screen == Screen::List) {
-    for (int row = 0; row < VisibleScripts && editor->m_first + row <= editor->scriptCount(); ++row) {
-      const int index = editor->m_first + row;
-      const int y = row * 31;
-      const KDColor color = index == editor->m_selected ? Palette::ListCellBackgroundSelected : Palette::BackgroundHard;
-      ctx->fillRect(KDRect(0, y, width, 30), color);
-      auto record = editor->scriptAt(index);
-      char base[MaxName + 1] = {};
-      if (!record.isNull()) {
-        editor->scriptName(record, base);
-      }
-      label(record.isNull() ? "+ Nouveau script" : base, 9, y + 8, color);
-      if (!record.isNull()) {
-        label("...", width - 30, y + 8, color);
-      }
-    }
-  } else if (editor->m_screen == Screen::Edit) {
-    label(editor->m_script, 29, 1);
-    ctx->fillRect(KDRect(0, 17, 26, height - 37), Gutter);
-    const int line = editor->m_line;
-    const int positions[] = {30, 62 + (height - 123) / 2 - 7, height - 48};
-    for (int i = 0; i < 3; ++i) {
-      const int number = line + i;
-      if (number >= 1 && number <= editor->m_lines + 1) {
-        char value[11];
-        numberText(number, value);
-        label(value, 4, positions[i], Gutter);
-      }
-    }
-  } else {
-    label(editor->m_script, 12, 30);
-    if (editor->m_screen == Screen::Options) {
-      label("OK  Renommer", 12, 78);
-      label("Retour  Liste des scripts", 12, 110);
-    } else {
-      label("Nouveau nom (a-z, 0-9, _)", 12, 59);
-    }
+void Editor::Content::layoutSubviews(bool force) {
+  const KDCoordinate width = bounds().width();
+  if (m_editor->m_screen == Screen::Edit) {
+    const auto formulaFrame = [this](int offset) {
+      const KDRect row = rowFrame(offset);
+      return row.isEmpty() ? KDRectZero :
+        KDRect(GutterWidth + 7, row.y() + 2, row.width() - GutterWidth - 12, row.height() - 4);
+    };
+    previous.setFrame(formulaFrame(-1), force);
+    field.setFrame(formulaFrame(0), force);
+    next.setFrame(formulaFrame(1), force);
+  } else if (m_editor->m_screen == Screen::Rename) {
+    name.setFrame(KDRect(13, 69, width - 26, 30), force);
   }
-  ctx->fillRect(KDRect(0, height - 20, width, 20), Gutter);
-  label(editor->m_status, 6, height - 17, Gutter);
+}
+
+void Editor::Content::drawList(KDContext *ctx) const {
+  auto *editor = m_editor;
+  const int width = bounds().width();
+  const int count = editor->scriptCount();
+  label(ctx, "Scripts LaTeX", KDPoint(10, 5), Palette::PrimaryText, Palette::BackgroundAppsSecondary);
+  for (int row = 0; row < VisibleScripts && editor->m_first + row <= count; ++row) {
+    const int index = editor->m_first + row;
+    const int y = HeaderHeight + row * ListRowHeight;
+    const bool selected = index == editor->m_selected;
+    const KDColor color = selected ? Palette::ListCellBackgroundSelected :
+      (row % 2 ? Palette::BackgroundApps : Palette::ListCellBackground);
+    ctx->fillRect(KDRect(0, y, width, ListRowHeight - 1), color);
+    ctx->fillRect(KDRect(0, y + ListRowHeight - 1, width, 1), Palette::ListCellBorder);
+    if (selected) {
+      ctx->fillRect(KDRect(0, y, 3, ListRowHeight - 1), Palette::AccentText);
+    }
+    auto record = editor->scriptAt(index);
+    if (record.isNull()) {
+      label(ctx, "+  Nouveau script", KDPoint(10, y + 7), Palette::AccentText, color);
+      continue;
+    }
+    char base[MaxName + 1] = {};
+    editor->scriptName(record, base);
+    label(ctx, base, KDPoint(10, y + 6), Palette::PrimaryText, color, KDFont::LargeFont);
+    const bool editable = !lookup(base, SourceExtension).isNull();
+    label(ctx, editable ? "..." : "Export", KDPoint(width - (editable ? 30 : 51), y + 7),
+          Palette::SecondaryText, color);
+  }
+  if (count >= VisibleScripts) {
+    const int track = VisibleScripts * ListRowHeight;
+    const int thumb = track * VisibleScripts / (count + 1);
+    ctx->fillRect(KDRect(width - 3, HeaderHeight, 3, track), Palette::ScrollBarBackground);
+    ctx->fillRect(KDRect(width - 3, HeaderHeight + track * editor->m_first / (count + 1), 3, thumb),
+                  Palette::ScrollBarForeground);
+  }
+}
+
+void Editor::Content::drawEditor(KDContext *ctx) const {
+  char filename[MaxName + 4];
+  strlcpy(filename, m_editor->m_script, sizeof(filename));
+  strlcat(filename, ".py", sizeof(filename));
+  label(ctx, filename, KDPoint(10, 5), Palette::PrimaryText, Palette::BackgroundAppsSecondary);
+  const KDRect active = rowFrame(0);
+  ctx->fillRect(KDRect(0, HeaderHeight, GutterWidth,
+                       bounds().height() - HeaderHeight - FooterHeight),
+                Palette::CodeGutterViewBackground);
+  for (int offset = -1; offset <= 1; ++offset) {
+    const KDRect row = rowFrame(offset);
+    if (row.isEmpty()) {
+      continue;
+    }
+    const bool focused = offset == 0;
+    const KDColor gutter = focused ? Palette::CodeBackgroundSelected : Palette::CodeGutterViewBackground;
+    ctx->fillRect(KDRect(0, row.y(), GutterWidth, row.height()), gutter);
+    ctx->fillRect(KDRect(GutterWidth, row.y(), 1, row.height()), Palette::ListCellBorder);
+    char number[11];
+    numberText(m_editor->m_line + offset + 1, number);
+    const KDCoordinate x = GutterWidth - KDFont::SmallFont->stringSize(number).width() - 6;
+    const KDCoordinate y = row.y() + (row.height() - 14) / 2;
+    label(ctx, number, KDPoint(x, y), focused ? Palette::PrimaryText : Palette::SecondaryText, gutter);
+  }
+  ctx->fillRect(KDRect(0, active.y(), 3, active.height()), Palette::AccentText);
+  ctx->fillRect(KDRect(GutterWidth + 1, active.y(), active.width() - GutterWidth - 1, 1), Palette::ListCellBorder);
+  ctx->fillRect(KDRect(GutterWidth + 1, active.bottom(), active.width() - GutterWidth - 1, 1), Palette::ListCellBorder);
+}
+
+void Editor::Content::drawOptions(KDContext *ctx) const {
+  label(ctx, m_editor->m_script, KDPoint(10, 5), Palette::PrimaryText, Palette::BackgroundAppsSecondary);
+  if (m_editor->m_screen == Screen::Options) {
+    ctx->fillRect(KDRect(0, HeaderHeight + 4, bounds().width(), 31), Palette::ListCellBackgroundSelected);
+    ctx->fillRect(KDRect(0, HeaderHeight + 4, 3, 31), Palette::AccentText);
+    label(ctx, "Renommer", KDPoint(10, HeaderHeight + 10), Palette::PrimaryText,
+          Palette::ListCellBackgroundSelected, KDFont::LargeFont);
+    label(ctx, ">", KDPoint(bounds().width() - 17, HeaderHeight + 11), Palette::AccentText,
+          Palette::ListCellBackgroundSelected);
+    return;
+  }
+  label(ctx, "Nouveau nom", KDPoint(12, 47), Palette::PrimaryText, Palette::BackgroundHard, KDFont::LargeFont);
+  ctx->strokeRect(KDRect(11, 67, bounds().width() - 22, 34), Palette::AccentText);
+  label(ctx, "Minuscules, chiffres et _", KDPoint(12, 109), Palette::SecondaryText);
+}
+
+void Editor::Content::drawRect(KDContext *ctx, KDRect) const {
+  const KDCoordinate footer = bounds().height() - FooterHeight;
+  ctx->fillRect(bounds(), Palette::BackgroundHard);
+  ctx->fillRect(KDRect(0, 0, bounds().width(), HeaderHeight - 1), Palette::BackgroundAppsSecondary);
+  ctx->fillRect(KDRect(0, HeaderHeight - 1, bounds().width(), 1), Palette::ListCellBorder);
+  ctx->fillRect(KDRect(0, footer, bounds().width(), FooterHeight), Palette::BackgroundAppsSecondary);
+  ctx->fillRect(KDRect(0, footer, bounds().width(), 1), Palette::ListCellBorder);
+  switch (m_editor->m_screen) {
+    case Screen::List: drawList(ctx); break;
+    case Screen::Edit: drawEditor(ctx); break;
+    case Screen::Options:
+    case Screen::Rename: drawOptions(ctx); break;
+  }
+  if (m_editor->m_status) {
+    label(ctx, m_editor->m_status, KDPoint(8, footer + 4), Palette::PrimaryText, Palette::BackgroundAppsSecondary);
+    return;
+  }
+  switch (m_editor->m_screen) {
+    case Screen::List:
+      keyHint(ctx, "OK", "Ouvrir", 8, footer + 3);
+      keyHint(ctx, ">", "Options", 102, footer + 3);
+      break;
+    case Screen::Edit:
+      keyHint(ctx, "EXE", "Ligne suivante", 8, footer + 3);
+      keyHint(ctx, "SHIFT", "Haut / Bas", 169, footer + 3);
+      break;
+    case Screen::Options:
+    case Screen::Rename:
+      keyHint(ctx, "OK", "Valider", 8, footer + 3);
+      keyHint(ctx, "BACK", "Retour", 102, footer + 3);
+      break;
+  }
 }
 
 Editor::Editor(Responder *parent) : ViewController(parent), m_content(this) {}
@@ -276,13 +384,13 @@ bool Editor::openScript() {
     m_lines += *c == '\n';
   }
   loadLine(0);
-  transition(Screen::Edit, "EXE suivant   SHIFT haut/bas");
+  transition(Screen::Edit, nullptr);
   return true;
 }
 
 void Editor::renameScript() {
   m_content.name.setText(m_script);
-  transition(Screen::Rename, "OK valider   Retour annuler");
+  transition(Screen::Rename, nullptr);
   m_content.name.setText(m_script);
 }
 
@@ -330,7 +438,7 @@ bool Editor::textFieldDidFinishEditing(TextField *, const char *text, Ion::Event
 }
 
 bool Editor::textFieldDidAbortEditing(TextField *) {
-  transition(Screen::Options, "OK renommer   Retour liste");
+  transition(Screen::Options, nullptr);
   Container::activeApp()->setFirstResponder(this);
   return true;
 }
@@ -342,7 +450,7 @@ bool Editor::handleEvent(Ion::Events::Event event) {
       return true;
     }
     if (event == Ion::Events::Back) {
-      transition(Screen::List, "OK ouvrir   > options");
+      transition(Screen::List, nullptr);
       return true;
     }
   }
@@ -353,6 +461,7 @@ bool Editor::handleEvent(Ion::Events::Event event) {
     const int next = m_selected + (event == Ion::Events::Up ? -1 : 1);
     if (next >= 0 && next <= scriptCount()) {
       m_selected = next;
+      m_status = nullptr;
       if (m_selected < m_first) m_first = m_selected;
       if (m_selected >= m_first + VisibleScripts) m_first = m_selected - VisibleScripts + 1;
     }
@@ -363,7 +472,7 @@ bool Editor::handleEvent(Ion::Events::Event event) {
     } else {
       scriptName(record, m_script);
       if (event == Ion::Events::Right && !lookup(m_script, SourceExtension).isNull()) {
-        transition(Screen::Options, "OK renommer   Retour liste");
+        transition(Screen::Options, nullptr);
       } else {
         openScript();
       }
@@ -405,6 +514,12 @@ void Editor::loadLine(int line) {
   m_content.refresh();
 }
 
+void Editor::layoutFieldDidChangeSize(LayoutField *) {
+  if (m_screen == Screen::Edit) {
+    m_content.refresh();
+  }
+}
+
 bool Editor::layoutFieldDidReceiveEvent(LayoutField *, Ion::Events::Event event) {
   const bool finish = event == Ion::Events::Back || event == Ion::Events::Home;
   const bool previous = event == Ion::Events::ShiftUp;
@@ -414,7 +529,7 @@ bool Editor::layoutFieldDidReceiveEvent(LayoutField *, Ion::Events::Event event)
   }
   if (saveLine()) {
     if (finish) {
-      transition(Screen::List, "OK ouvrir   > options");
+      transition(Screen::List, nullptr);
       Container::activeApp()->setFirstResponder(this);
       return event == Ion::Events::Back;
     }
@@ -422,7 +537,7 @@ bool Editor::layoutFieldDidReceiveEvent(LayoutField *, Ion::Events::Event event)
     if (target >= 0 && target <= m_lines) {
       loadLine(target);
     }
-    m_status = "EXE suivant   SHIFT haut/bas";
+    m_status = nullptr;
   }
   m_content.refresh();
   return true;

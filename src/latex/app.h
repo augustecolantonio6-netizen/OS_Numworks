@@ -19,6 +19,7 @@ public:
   NestedMenuController *variableBoxForInputEventHandler(InputEventHandler *) override;
   bool layoutFieldShouldFinishEditing(LayoutField *, Ion::Events::Event) override { return false; }
   bool layoutFieldDidReceiveEvent(LayoutField *, Ion::Events::Event event) override;
+  void layoutFieldDidChangeSize(LayoutField *) override;
   bool textFieldShouldFinishEditing(TextField *, Ion::Events::Event event) override;
   bool textFieldDidReceiveEvent(TextField *, Ion::Events::Event) override { return false; }
   bool textFieldDidFinishEditing(TextField *, const char *text, Ion::Events::Event) override;
@@ -54,6 +55,10 @@ private:
     int numberOfSubviews() const override;
     View *subviewAtIndex(int index) override;
     void layoutSubviews(bool force = false) override;
+    KDRect rowFrame(int offset) const;
+    void drawList(KDContext *ctx) const;
+    void drawEditor(KDContext *ctx) const;
+    void drawOptions(KDContext *ctx) const;
   };
 
   Record scriptAt(int index) const;
@@ -72,7 +77,7 @@ private:
   char m_nameBuffer[MaxName + 1] = {};
   Content m_content;
   Screen m_screen = Screen::List;
-  const char *m_status = "OK ouvrir   > options";
+  const char *m_status = nullptr;
   int m_selected = 0;
   int m_first = 0;
   int m_line = 0;
