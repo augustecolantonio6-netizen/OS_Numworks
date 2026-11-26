@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <apps/i18n.h>
-#include <apps/reader/reader_icon.h>
+#include <apps/notes/notes_icon.h>
 #include <ion/unicode/utf8_helper.h>
 #include <string.h>
 
@@ -360,7 +360,7 @@ bool Controller::textFieldDidAbortEditing(TextField *) {
 
 I18n::Message App::Descriptor::name() { return I18n::Message::NotesApp; }
 I18n::Message App::Descriptor::upperName() { return I18n::Message::NotesAppCapital; }
-const Image *App::Descriptor::icon() { return ImageStore::ReaderIcon; }
+const Image *App::Descriptor::icon() { return ImageStore::NotesIcon; }
 
 App *App::Snapshot::unpack(Container *container) {
   return new (container->currentAppBuffer()) App(this);
