@@ -1,19 +1,19 @@
 # AOS — Auguste OS
 
-AOS est un firmware personnalisé pour la NumWorks N0110. Son premier écran est un accueil sombre avec une grille de trois colonnes, un indicateur de batterie et la grille native d’Upsilon avec les icônes de Calculation et LaTeX. Depuis l’accueil, sélectionne l’icône avec les flèches et appuie sur OK ou EXE. La touche Maison ramène à l’accueil.
+AOS est un firmware personnalisé pour la NumWorks N0110. Son premier écran est un accueil sombre avec une grille de trois colonnes, un indicateur de batterie et la grille native d’Upsilon avec les icônes de Calculation, LaTeX et Notes. Depuis l’accueil, sélectionne l’icône avec les flèches et appuie sur OK ou EXE. La touche Maison ramène à l’accueil.
 
 ## Télécharger AOS pour N0110
 
-Les liens « Dernière release » suivent automatiquement la version stable désignée par GitHub. Avant la première publication dans Releases, utilise les liens directs v0.5.1.
+Les liens « Dernière release » suivent automatiquement la version stable désignée par GitHub. Avant la première publication dans Releases, utilise les liens directs v0.6.0.
 
-| Slot | Format | Adresse | Dernière release | v0.5.1 |
+| Slot | Format | Adresse | Dernière release | v0.6.0 |
 | --- | --- | --- | --- | --- |
-| A | `.dfu` | `0x90000000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-A.dfu) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.5.1/AOS-v0.5.1-N0110-slot-A.dfu) |
-| A | `.bin` | `0x90000000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-A.bin) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.5.1/AOS-v0.5.1-N0110-slot-A.bin) |
-| B | `.dfu` | `0x90400000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-B.dfu) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.5.1/AOS-v0.5.1-N0110-slot-B.dfu) |
-| B | `.bin` | `0x90400000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-B.bin) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.5.1/AOS-v0.5.1-N0110-slot-B.bin) |
+| A | `.dfu` | `0x90000000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-A.dfu) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.6.0/AOS-v0.6.0-N0110-slot-A.dfu) |
+| A | `.bin` | `0x90000000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-A.bin) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.6.0/AOS-v0.6.0-N0110-slot-A.bin) |
+| B | `.dfu` | `0x90400000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-B.dfu) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.6.0/AOS-v0.6.0-N0110-slot-B.dfu) |
+| B | `.bin` | `0x90400000` | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/AOS-N0110-slot-B.bin) | [Télécharger](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.6.0/AOS-v0.6.0-N0110-slot-B.bin) |
 
-Sommes SHA-256 de la [dernière release](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/SHA256SUMS) et de la [v0.5.1](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.5.1/SHA256SUMS).
+Sommes SHA-256 de la [dernière release](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases/latest/download/SHA256SUMS) et de la [v0.6.0](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.6.0/SHA256SUMS).
 
 Les images ont le format de démarrage d'Upsilon pour N0110. Phi est le chargeur de démarrage visé. Le démarrage et la reprise de veille avec la version de Phi installée sur la calculatrice restent à valider sur l'appareil.
 
@@ -21,7 +21,7 @@ Identifie d'abord le slot libre et la version de Phi. Le flash efface le contenu
 
 ## Vérifier la version démarrée
 
-Une fois le transfert terminé, débranche le câble USB et sélectionne le slot que tu viens de flasher dans le menu de démarrage. Le menu varie selon la version du chargeur. L’accueil mis à jour affiche **v0.5.1** en haut et les icônes **Calculation** et **LaTeX**. Si l’accueil affiche encore « Aucune application », vérifie le fichier téléchargé et le slot sélectionné avant de reflasher.
+Une fois le transfert terminé, débranche le câble USB et sélectionne le slot que tu viens de flasher dans le menu de démarrage. Le menu varie selon la version du chargeur. L’accueil mis à jour affiche **v0.6.0** en haut et les icônes **Calculation**, **LaTeX** et **Notes**. Si l’accueil affiche encore « Aucune application », vérifie le fichier téléchargé et le slot sélectionné avant de reflasher.
 
 ## Écran de connexion USB
 
@@ -36,6 +36,13 @@ AOS réutilise le [contrôleur d'écran USB d'Upsilon](https://github.com/Upsilo
 - Chaque script possède son propre fichier `.py` pour le transfert USB. Dans [My NumWorks](https://my.numworks.com/), récupère le fichier et copie son contenu brut dans un document `.tex`. L’app LaTeX ne propose aucune commande d’exécution. Le fichier utilise des blocs `\[ ... \]` de LaTeX pur.
 
 L’app prend en charge une formule par ligne. Elle conserve les sources éditables et le LaTeX exporté dans deux enregistrements séparés. Les anciens fichiers `aos_latex.py` sont conservés comme exports sans source éditable. Exporte tes scripts avant un RESET ou un nouveau flash. La récupération via le site My NumWorks reste à vérifier sur la N0110.
+
+## Notes
+
+- Ouvre **Notes** depuis l’accueil. **OK** ouvre une note ou crée une note sur la ligne **Nouvelle note**. La flèche **Droite** affiche **Renommer** pour la note sélectionnée.
+- Dans l’éditeur, **EXE** ajoute un retour à la ligne et **OK** ou **Retour** enregistre et revient à la liste. L’éditeur affiche le texte brut sans numéros de ligne. Une note peut contenir jusqu’à 3 000 octets, selon l’espace disponible.
+- **Calculatrice vers PC.** Dans [My NumWorks](https://my.numworks.com/), récupère les scripts depuis la rubrique **Calculatrice**. Les notes portent des noms comme `note_cours.py`.
+- **PC vers calculatrice.** Dans **Mes scripts**, crée un script nommé par exemple `note_cours`, saisis le texte dans l’éditeur puis envoie-le à la calculatrice. Le préfixe `note_` permet à AOS de le ranger dans **Notes** sous le nom `cours`. Le transfert USB nécessite une connexion de données. Le site peut signaler une erreur de syntaxe si tu lances du texte brut comme du Python.
 
 ## Compiler
 
@@ -53,8 +60,8 @@ Le script récupère une révision précise d'Upsilon dans `.build/`, utilise se
 Pousse un tag de version commençant par `v` depuis le commit à publier.
 
 ```sh
-git tag v0.5.1
-git push origin v0.5.1
+git tag v0.6.0
+git push origin v0.6.0
 ```
 
 GitHub Actions compile les deux slots depuis le tag, lance les tests et publie les quatre images, le fichier `SHA256SUMS` et la licence dans [Releases](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases) si le build réussit.
@@ -65,4 +72,4 @@ Le build sélectionne l’application native `calculation` d’Upsilon avec `EPS
 
 ## Crédits
 
-AOS utilise Ion, Kandinsky, Escher, Poincaré et le format de démarrage d'[Upsilon](https://github.com/UpsilonNumworks/Upsilon), issu d'Omega et d'Epsilon. Le script spécialise la liste des sources compilées et adapte les valeurs sentinelles des champs d'applications externes. Voir la [licence CC BY-NC-SA 4.0](LICENSE.md).
+L’éditeur Notes utilise le composant multiligne [TextArea d’Upsilon](https://github.com/UpsilonNumworks/Upsilon/blob/539b90a9a8aaf3db9451da13505f938116650f14/escher/src/text_area.cpp) et son format de stockage Python. AOS utilise Ion, Kandinsky, Escher, Poincaré et le format de démarrage d'[Upsilon](https://github.com/UpsilonNumworks/Upsilon), issu d'Omega et d'Epsilon. Le script spécialise la liste des sources compilées et adapte les valeurs sentinelles des champs d'applications externes. Voir la [licence CC BY-NC-SA 4.0](LICENSE.md).

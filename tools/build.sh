@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-upstream="$root/.build/upsilon-polish"
+upstream="$root/.build/upsilon-notes"
 revision=539b90a9a8aaf3db9451da13505f938116650f14
 
 if [[ ! -e "$upstream/.git" ]]; then
@@ -22,10 +22,12 @@ if ! git -C "$upstream" apply --reverse --check "$patch_file" 2>/dev/null; then
   git -C "$upstream" apply "$patch_file"
 fi
 cp "$root/src/usb_connection.h" "$upstream/apps/"
-mkdir -p "$upstream/apps/latex"
-cp "$root"/src/latex/* "$upstream/apps/latex/"
+for app in latex notes; do
+  mkdir -p "$upstream/apps/$app"
+  cp "$root/src/$app/"* "$upstream/apps/$app/"
+done
 
-make -C "$upstream" -j"${JOBS:-4}" MODEL=bootloader EPSILON_APPS="calculation latex" \
+make -C "$upstream" -j"${JOBS:-4}" MODEL=bootloader EPSILON_APPS="calculation latex notes" \
   EPSILON_I18N=en HOME_DISPLAY_EXTERNALS= INCLUDE_ULAB=0 OMEGA_USERNAME=AOS \
   epsilon.A.bin epsilon.B.bin
 
