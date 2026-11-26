@@ -213,7 +213,7 @@ index 2a65458..58e8be9 100644
 @@ -1,4 +1,4 @@
  Apps = "Applications"
 -AppsCapital = "UPSILON"
-+AppsCapital = "AOS v0.6.4"
++AppsCapital = "AOS v0.6.5"
  ForbiddenAppInExamMode1 = "This application is"
  ForbiddenAppInExamMode2 = "forbidden in exam mode"
 diff --git a/apps/home/controller.cpp b/apps/home/controller.cpp
@@ -381,3 +381,121 @@ index 514a926..7ae81e6 100644
      "apps/rpn/rpn_icon.png" : "apps/rpn_icon.png",
      "apps/sequence/sequence_icon.png" : "apps/sequence_icon.png",
      "apps/settings/settings_icon.png" : "apps/settings_icon.png",
+diff --git a/escher/include/escher/run_loop.h b/escher/include/escher/run_loop.h
+index 26ddc0a..eb01c5f 100644
+--- a/escher/include/escher/run_loop.h
++++ b/escher/include/escher/run_loop.h
+@@ -17,6 +17,7 @@ private:
+   bool step();
+   int m_time;
+   Timer * m_firstTimer;
++  Timer * m_nextTimerToTick = nullptr;
+ };
+ 
+ #endif
+diff --git a/escher/src/run_loop.cpp b/escher/src/run_loop.cpp
+index bc2f02a..0d91746 100644
+--- a/escher/src/run_loop.cpp
++++ b/escher/src/run_loop.cpp
+@@ -38,12 +38,14 @@ bool RunLoop::step() {
+ 
+   if (m_time >= Timer::TickDuration) {
+     m_time -= Timer::TickDuration;
+-    Timer * timer = m_firstTimer;
+-    while (timer) {
++    // A callback can unregister itself or another timer during this pass.
++    m_nextTimerToTick = m_firstTimer;
++    while (m_nextTimerToTick) {
++      Timer * timer = m_nextTimerToTick;
++      m_nextTimerToTick = timer->next();
+       if (timer->tick()) {
+         dispatchEvent(Ion::Events::TimerFire);
+       }
+-      timer = timer->next();
+     }
+   }
+ 
+@@ -71,25 +73,37 @@ bool RunLoop::step() {
+ }
+ 
+ void RunLoop::addTimer(Timer * timer) {
+-  if (m_firstTimer == nullptr) {
+-    m_firstTimer = timer;
+-  } else {
+-    Timer * actual = m_firstTimer;
+-    while (actual->next()) {
+-      actual = actual->next();
++  Timer * previous = nullptr;
++  for (Timer * current = m_firstTimer; current; current = current->next()) {
++    if (current == timer) {
++      return;
+     }
+-    actual->setNext(timer);
++    previous = current;
++  }
++  timer->setNext(nullptr);
++  if (previous) {
++    previous->setNext(timer);
++  } else {
++    m_firstTimer = timer;
+   }
+ }
+ 
+ void RunLoop::removeTimer(Timer * timer) {
+-  if (m_firstTimer == timer) {
+-    m_firstTimer = timer->next();
+-  } else {
+-    Timer * actual = m_firstTimer;
+-    while (actual->next() != timer) {
+-      actual = actual->next();
++  Timer * previous = nullptr;
++  for (Timer * current = m_firstTimer; current; current = current->next()) {
++    if (current == timer) {
++      Timer * next = current->next();
++      if (previous) {
++        previous->setNext(next);
++      } else {
++        m_firstTimer = next;
++      }
++      if (m_nextTimerToTick == current) {
++        m_nextTimerToTick = next;
++      }
++      current->setNext(nullptr);
++      return;
+     }
+-    actual->setNext(timer->next());
++    previous = current;
+   }
+ }
+diff --git a/escher/src/selectable_table_view.cpp b/escher/src/selectable_table_view.cpp
+index 226ed1b..a7c6b7d 100644
+--- a/escher/src/selectable_table_view.cpp
++++ b/escher/src/selectable_table_view.cpp
+@@ -57,10 +57,9 @@ void SelectableTableView::didEnterResponderChain(Responder * previousFirstRespon
+   selectCellAtLocation(col, row);
+ }
+ 
+-void SelectableTableView::willExitResponderChain(Responder * nextFirstResponder) {
+-  if (nextFirstResponder != nullptr) {
+-    unhighlightSelectedCell();
+-  }
++void SelectableTableView::willExitResponderChain(Responder *) {
++  // Unhighlight before app teardown as well, so animated cells unregister.
++  unhighlightSelectedCell();
+ }
+ 
+ void SelectableTableView::deselectTable(bool withinTemporarySelection) {
+diff --git a/escher/src/timer.cpp b/escher/src/timer.cpp
+index 742634f..1b8d48f 100644
+--- a/escher/src/timer.cpp
++++ b/escher/src/timer.cpp
+@@ -2,7 +2,8 @@
+ 
+ Timer::Timer(uint32_t period) :
+   m_period(period),
+-  m_numberOfTicksBeforeFire(period)
++  m_numberOfTicksBeforeFire(period),
++  m_next(nullptr)
+ {
+ }
+ 
