@@ -1,5 +1,5 @@
 diff --git a/apps/apps_container.cpp b/apps/apps_container.cpp
-index 60bcdce..c492624 100644
+index 60bcdce..36b5df4 100644
 --- a/apps/apps_container.cpp
 +++ b/apps/apps_container.cpp
 @@ -136,6 +136,10 @@ void AppsContainer::suspend(bool checkIfOnOffKeyReleased) {
@@ -13,7 +13,7 @@ index 60bcdce..c492624 100644
    /* Ion::Power::suspend() completely shuts down the LCD controller. Therefore
     * the frame memory is lost. That's why we need to force a window redraw
     * upon wakeup, otherwise the screen is filled with noise. */
-@@ -151,44 +155,47 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
+@@ -151,44 +155,54 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
    if (event == Ion::Events::USBEnumeration || event == Ion::Events::USBPlug || event == Ion::Events::BatteryCharging) {
      Ion::LED::updateColorWithPlugAndCharge();
    }
@@ -86,10 +86,17 @@ index 60bcdce..c492624 100644
 +    Ion::USB::disable();
 +    if (switchTo(m_beforeUsb)) {
 +      m_beforeUsb = nullptr;
++      m_usbConnection.didLeaveScreen(Ion::Timing::millis());
 +    }
 +    return true;
 +  }
 +  if (event == Ion::Events::USBEnumeration) {
++    return true;
++  }
++  // Connection events still run during the handoff. Keep keys typed on the
++  // USB screen from reaching the newly restored app.
++  if (event.isKeyboardEvent() && event != Ion::Events::OnOff &&
++      (onUsbScreen || m_usbConnection.shouldIgnoreKeys(Ion::Timing::millis()))) {
 +    return true;
 +  }
 +
@@ -97,7 +104,7 @@ index 60bcdce..c492624 100644
      if (KDIonContext::sharedContext()->zoomEnabled) {
        bool changedZoom = true;
 
-@@ -237,65 +244,14 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
+@@ -237,65 +251,14 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
    return didProcessEvent || alphaLockWantsRedraw;
  }
 
@@ -126,8 +133,9 @@ index 60bcdce..c492624 100644
 -      // If the USB isn't plugged in USBPlug event, we disable USB
 -      Ion::USB::disable();
 -    }
--    return true;
--  }
++  if (event == Ion::Events::USBPlug || event == Ion::Events::USBEnumeration) {
+     return true;
+   }
 -  // If key home or key back is pressed, we switch to the home app.
 -  if (event == Ion::Events::Home || event == Ion::Events::Back) {
 -    switchTo(appSnapshotAtIndex(0));
@@ -137,7 +145,10 @@ index 60bcdce..c492624 100644
 -  if (event == Ion::Events::ShiftHome) {
 -    switchTo(appSnapshotAtIndex(1));
 -    return true;
--  }
++  if (s_activeApp->snapshot() != usbConnectedAppSnapshot() &&
++      (event == Ion::Events::Home || event == Ion::Events::Back)) {
++    return switchTo(appSnapshotAtIndex(0));
+   }
 -
 -  // Iterate through the switch events to find the one that matches the event, if one match, switch to the app at the index of the switch event.
 -  for(int i = 0; i < std::min((int) (sizeof(switch_events) / sizeof(Ion::Events::Event)), APPS_CONTAINER_SNAPSHOT_COUNT); i++) {
@@ -151,18 +162,14 @@ index 60bcdce..c492624 100644
 -  // Add EE shortcut to go to the settings (app number 12)
 -  if (event == Ion::Events::EE) {
 -    switchTo(appSnapshotAtIndex(12));
-+  if (event == Ion::Events::USBPlug || event == Ion::Events::USBEnumeration) {
-     return true;
-   }
+-    return true;
+-  }
 -
 -  // Add Shift + Ans shortcut to go to the previous app
 -  if (event == Ion::Events::ShiftAns) {
 -    switchTo(appSnapshotAtIndex(m_lastAppIndex));
 -    return true;
-+  if (s_activeApp->snapshot() != usbConnectedAppSnapshot() &&
-+      (event == Ion::Events::Home || event == Ion::Events::Back)) {
-+    return switchTo(appSnapshotAtIndex(0));
-   }
+-  }
 -
    // If the event is the OnOff key, we suspend the calculator.
    if (event == Ion::Events::OnOff) {
@@ -200,13 +207,13 @@ index ce36dc5..9da196b 100644
 +  return appSnapshotAtIndex(0);
  }
 diff --git a/apps/home/base.en.i18n b/apps/home/base.en.i18n
-index 2a65458..ec91c8d 100644
+index 2a65458..58e8be9 100644
 --- a/apps/home/base.en.i18n
 +++ b/apps/home/base.en.i18n
 @@ -1,4 +1,4 @@
  Apps = "Applications"
 -AppsCapital = "UPSILON"
-+AppsCapital = "AOS v0.4.1"
++AppsCapital = "AOS v0.4.2"
  ForbiddenAppInExamMode1 = "This application is"
  ForbiddenAppInExamMode2 = "forbidden in exam mode"
 diff --git a/apps/home/controller.cpp b/apps/home/controller.cpp
@@ -310,6 +317,22 @@ index 73d6bf5..b37a51c 100644
      c.leave(c.addressPointer());
    }
  }
+diff --git a/ion/src/device/shared/usb/dfu_relocated.cpp b/ion/src/device/shared/usb/dfu_relocated.cpp
+index 7ab511c..4938f6a 100644
+--- a/ion/src/device/shared/usb/dfu_relocated.cpp
++++ b/ion/src/device/shared/usb/dfu_relocated.cpp
+@@ -54,8 +54,10 @@ void DFU(bool exitWithKeyboard, void * data) {
+    * run the instructions from the DFU bootloader, the CPU looks for
+    * instructions in the ICache and then in the RAM. We thus need to flush the
+    * DCache to update the RAM. */
+-  // Flush data cache
++  // The stack can be reused between sessions. Synchronize both caches
++  // before executing the newly copied instructions.
+   Device::Cache::cleanDCache();
++  Device::Cache::invalidateICache();
+
+   /* 4- Disable all interrupts
+    * The interrupt service routines live in the Flash and could be overwritten
 diff --git a/themes/themes/local/upsilon_light.json b/themes/themes/local/upsilon_light.json
 index 68aaf85..1043ab4 100644
 --- a/themes/themes/local/upsilon_light.json
