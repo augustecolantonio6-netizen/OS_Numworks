@@ -1,4 +1,5 @@
 #include "launcher.h"
+#include "usb_connection.h"
 
 #include <cassert>
 
@@ -19,6 +20,20 @@ bool handle(Aos::Input input) {
 }
 
 int main() {
+  Aos::UsbConnection usb;
+  assert(!usb.visible());
+  usb.update(true);
+  assert(usb.visible());
+  usb.update(true, true);
+  assert(!usb.visible());
+  usb.update(true);
+  assert(!usb.visible());
+  usb.update(false);
+  usb.update(true);
+  assert(usb.visible());
+  usb.update(false);
+  assert(!usb.visible());
+
   using Aos::Key;
   Aos::Launcher empty(nullptr, 0);
   assert(!empty.dispatch({Key::Confirm, 0}));

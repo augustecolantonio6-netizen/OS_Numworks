@@ -28,9 +28,14 @@ sed -i -E \
   -e "s/(m_externalAppsRAM(Start|End) = )0xFFFFFFFF,/\\1reinterpret_cast<const uint8_t *>(0xFFFFFFFFu),/" \
   "$upstream/ion/src/device/bootloader/platform_info.cpp"
 
-make -C "$upstream" -j"${JOBS:-4}" MODEL=bootloader EPSILON_APPS= \
+usb_sources='apps/usb/usb_connected_controller.cpp apps/battery_view.cpp
+escher/src/view.cpp escher/src/window.cpp escher/src/text_view.cpp
+escher/src/message_text_view.cpp escher/src/view_controller.cpp escher/src/responder.cpp
+escher/src/transparent_view.cpp escher/src/palette.cpp'
+
+make -C "$upstream" -f Makefile -f "$root/tools/device.mk" -j"${JOBS:-4}" MODEL=bootloader EPSILON_APPS= apps_src= \
   EPSILON_I18N=en HOME_DISPLAY_EXTERNALS= INCLUDE_ULAB=0 OMEGA_USERNAME=AOS \
-  'epsilon_src=$(ion_src) $(liba_src) $(libaxx_src) $(default_kandinsky_src) aos/main.cpp aos/launcher.cpp' \
+  'epsilon_src=$(ion_src) $(liba_src) $(libaxx_src) $(default_kandinsky_src) aos/main.cpp aos/launcher.cpp aos/usb_screen.cpp '"${usb_sources//$'\n'/ }" \
   epsilon.A.bin epsilon.B.bin
 
 output="$upstream/output/release/device/bootloader"

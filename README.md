@@ -2,20 +2,26 @@
 
 AOS est un firmware personnalisé pour la NumWorks N0110. Son premier écran est un accueil sombre avec une grille de trois colonnes, un indicateur de batterie et un catalogue vide. Les six cases dessinées à l'écran sont des emplacements visuels. Le système démarre sur cet accueil et contient zéro application.
 
-## Télécharger AOS v0.1.0
+## Télécharger AOS v0.2.0
 
-Télécharge directement l’image qui correspond à ton slot. [Sommes SHA-256](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.1.0/SHA256SUMS).
+Télécharge directement l’image qui correspond à ton slot. [Sommes SHA-256](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/SHA256SUMS).
 
 Les images ont le format de démarrage d'Upsilon pour N0110. Phi est le chargeur de démarrage visé. Le démarrage et la reprise de veille avec la version de Phi installée sur la calculatrice restent à valider sur l'appareil.
 
 | Image | Adresse de début | Format |
 | --- | --- | --- |
-| [AOS-N0110-slot-A.dfu](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.1.0/AOS-N0110-slot-A.dfu) | `0x90000000` | DfuSe avec adresse intégrée |
-| [AOS-N0110-slot-B.dfu](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.1.0/AOS-N0110-slot-B.dfu) | `0x90400000` | DfuSe avec adresse intégrée |
-| [AOS-N0110-slot-A.bin](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.1.0/AOS-N0110-slot-A.bin) | `0x90000000` | Image brute liée pour A |
-| [AOS-N0110-slot-B.bin](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.1.0/AOS-N0110-slot-B.bin) | `0x90400000` | Image brute liée pour B |
+| [AOS-N0110-slot-A.dfu](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-A.dfu) | `0x90000000` | DfuSe avec adresse intégrée |
+| [AOS-N0110-slot-B.dfu](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-B.dfu) | `0x90400000` | DfuSe avec adresse intégrée |
+| [AOS-N0110-slot-A.bin](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-A.bin) | `0x90000000` | Image brute liée pour A |
+| [AOS-N0110-slot-B.bin](https://github.com/augustecolantonio6-netizen/OS_Numworks/raw/refs/heads/main/firmware/v0.2.0/AOS-N0110-slot-B.bin) | `0x90400000` | Image brute liée pour B |
 
 Identifie d'abord le slot libre et la version de Phi. Le flash efface le contenu du slot choisi. Chaque image couvre uniquement de la flash externe dans son slot et le build vérifie cette limite. La compilation et les tests se déroulent sans connexion à une calculatrice.
+
+## Écran de connexion USB
+
+Branche un câble USB alimenté pour afficher l'écran « THE CALCULATOR IS CONNECTED ». Appuie sur Retour ou débranche le câble pour revenir à l'écran précédent. Après Retour, débranche et rebranche le câble pour réafficher l'écran.
+
+AOS réutilise le [contrôleur d'écran USB d'Upsilon](https://github.com/UpsilonNumworks/Upsilon/blob/539b90a9a8aaf3db9451da13505f938116650f14/apps/usb/usb_connected_controller.cpp), son thème clair et son indicateur de batterie. Cet écran indique la présence du câble. Le texte du milieu décrit cette connexion.
 
 ## Compiler
 
@@ -33,8 +39,8 @@ Le script récupère une révision précise d'Upsilon dans `.build/`, utilise se
 Pousse un tag de version commençant par `v` depuis le commit à publier.
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 GitHub Actions compile les deux slots depuis le tag, lance les tests et publie les quatre images, le fichier `SHA256SUMS` et la licence dans [Releases](https://github.com/augustecolantonio6-netizen/OS_Numworks/releases) si le build réussit.

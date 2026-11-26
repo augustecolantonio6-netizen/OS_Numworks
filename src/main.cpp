@@ -2,6 +2,8 @@
 #include <kandinsky/ion_context.h>
 
 #include "apps.h"
+#include "usb_connection.h"
+#include "usb_screen.h"
 
 namespace {
 
@@ -125,9 +127,21 @@ void ion_main(int, const char * const[]) {
   Ion::LED::updateColorWithPlugAndCharge();
 
   Aos::Launcher launcher(Aos::NativeApps, Aos::NativeAppCount);
+  Aos::UsbConnection usb;
+  Aos::UsbScreen usbScreen;
+  usbScreen.setFrame(Screen, true);
   KDContext &ctx = *KDIonContext::sharedContext();
   Battery battery = readBattery();
-  draw(ctx, launcher, battery);
+  const auto redraw = [&]() {
+    if (usb.visible()) {
+      usbScreen.updateBattery(battery.charge, battery.charging);
+      usbScreen.redraw(true);
+    } else {
+      draw(ctx, launcher, battery);
+    }
+  };
+  usb.update(Ion::USB::isPlugged());
+  redraw();
   uint64_t lastKeyAt = Ion::Timing::millis();
   uint64_t lastBatteryRead = lastKeyAt;
 
@@ -144,13 +158,21 @@ void ion_main(int, const char * const[]) {
       Ion::Power::suspend(powerKey);
       Ion::Backlight::setBrightness(Brightness);
       battery = readBattery();
-      draw(ctx, launcher, battery);
+      usb.update(Ion::USB::isPlugged());
+      redraw();
       lastKeyAt = lastBatteryRead = Ion::Timing::millis();
       continue;
     }
 
-    if (event.isKeyboardEvent() && launcher.dispatch({translateKey(event), event.id()})) {
-      draw(ctx, launcher, battery);
+    const bool keyboard = event.isKeyboardEvent();
+    const Key key = keyboard ? translateKey(event) : Key::Other;
+    const bool wasVisible = usb.visible();
+    usb.update(Ion::USB::isPlugged(), key == Key::Back);
+    if (usb.visible() != wasVisible) {
+      Ion::Events::setShiftAlphaStatus(Ion::Events::ShiftAlphaStatus::Default);
+      redraw();
+    } else if (!usb.visible() && keyboard && launcher.dispatch({key, event.id()})) {
+      redraw();
     }
     const bool powerChanged = event == Ion::Events::USBPlug ||
                               event == Ion::Events::USBEnumeration ||
@@ -159,7 +181,12 @@ void ion_main(int, const char * const[]) {
       const Battery current = readBattery();
       if (current != battery) {
         battery = current;
-        drawBattery(ctx, battery);
+        if (usb.visible()) {
+          usbScreen.updateBattery(battery.charge, battery.charging);
+          usbScreen.redraw(false);
+        } else {
+          drawBattery(ctx, battery);
+        }
       }
       Ion::LED::updateColorWithPlugAndCharge();
       lastBatteryRead = now;
