@@ -213,7 +213,7 @@ index 2a65458..58e8be9 100644
 @@ -1,4 +1,4 @@
  Apps = "Applications"
 -AppsCapital = "UPSILON"
-+AppsCapital = "AOS v0.6.0"
++AppsCapital = "AOS v0.6.1"
  ForbiddenAppInExamMode1 = "This application is"
  ForbiddenAppInExamMode2 = "forbidden in exam mode"
 diff --git a/apps/home/controller.cpp b/apps/home/controller.cpp
@@ -368,3 +368,15 @@ index 2b56a2e..465c388 100644
 +  // Closing a RAM-only transfer must return to the running app.
 +  m_device->setResetOnDisconnect(m_isErasingAndWriting);
    m_device->detach();
+diff --git a/themes/icons.json b/themes/icons.json
+index 514a926..d28baa9 100644
+--- a/themes/icons.json
++++ b/themes/icons.json
+@@ -10,6 +10,7 @@
+     "apps/probability/probability_icon.png" : "apps/probability_icon.png",
+     "apps/regression/regression_icon.png" : "apps/regression_icon.png",
+     "apps/reader/reader_icon.png" : "apps/reader_icon.png",
++    "apps/latex/latex_icon.png" : "apps/latex_icon.png",
+     "apps/rpn/rpn_icon.png" : "apps/rpn_icon.png",
+     "apps/sequence/sequence_icon.png" : "apps/sequence_icon.png",
+     "apps/settings/settings_icon.png" : "apps/settings_icon.png",

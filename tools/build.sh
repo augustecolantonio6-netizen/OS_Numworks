@@ -2,7 +2,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-upstream="$root/.build/upsilon-notes"
+upstream="$root/.build/upsilon-icon"
 revision=539b90a9a8aaf3db9451da13505f938116650f14
 
 if [[ ! -e "$upstream/.git" ]]; then
