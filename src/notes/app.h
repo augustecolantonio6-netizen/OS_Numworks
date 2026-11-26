@@ -20,7 +20,10 @@ public:
   bool textFieldDidAbortEditing(TextField *) override;
 
 private:
-  enum class Screen { Locked, List, Options, Rename, ConfirmDelete, Edit };
+  enum class Screen { Locked, NewPassword, ConfirmPassword, List, Options, Rename, ConfirmDelete, Edit };
+  static bool isPasswordScreen(Screen screen) {
+    return screen == Screen::Locked || screen == Screen::NewPassword || screen == Screen::ConfirmPassword;
+  }
   using Record = Ion::Storage::Record;
   static constexpr int MaxName = 24;
   static constexpr int MaxText = 3000;
@@ -71,6 +74,7 @@ private:
   const char *m_status = nullptr;
   Record m_record;
   char m_name[MaxName + 1] = {};
+  char m_pendingPassword[MaxName + 1] = {};
   char m_nameBuffer[MaxName + 1] = {};
   char m_payload[1 + MaxText + 1] = {};
   Content m_view;

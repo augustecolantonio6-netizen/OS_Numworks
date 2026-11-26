@@ -14,6 +14,8 @@ using Record = Ion::Storage::Record;
 constexpr char Prefix[] = "note_";
 constexpr size_t PrefixLength = sizeof(Prefix) - 1;
 constexpr char Extension[] = "py";
+constexpr char PasswordRecord[] = "notes_password.cfg";
+constexpr char DefaultPassword[] = "casio";
 constexpr KDCoordinate Header = 24;
 constexpr KDCoordinate Footer = 22;
 constexpr KDCoordinate Row = 29;
@@ -66,11 +68,11 @@ void Controller::Content::refresh() {
 
 int Controller::Content::numberOfSubviews() const {
   const auto screen = m_owner->m_screen;
-  return screen == Screen::Edit || screen == Screen::Rename || screen == Screen::Locked ? 1 : 0;
+  return screen == Screen::Edit || screen == Screen::Rename || isPasswordScreen(screen) ? 1 : 0;
 }
 
 View *Controller::Content::subviewAtIndex(int) {
-  if (m_owner->m_screen == Screen::Rename || m_owner->m_screen == Screen::Locked) {
+  if (m_owner->m_screen == Screen::Rename || isPasswordScreen(m_owner->m_screen)) {
     return &name;
   }
   return &area;
@@ -80,7 +82,7 @@ void Controller::Content::layoutSubviews(bool force) {
   if (m_owner->m_screen == Screen::Edit) {
     area.setFrame(KDRect(8, Header + 6, bounds().width() - 16,
                          std::max(0, bounds().height() - Header - Footer - 12)), force);
-  } else if (m_owner->m_screen == Screen::Rename || m_owner->m_screen == Screen::Locked) {
+  } else if (m_owner->m_screen == Screen::Rename || isPasswordScreen(m_owner->m_screen)) {
     name.setFrame(KDRect(13, 69, bounds().width() - 26, 30), force);
   }
 }
@@ -97,12 +99,12 @@ void Controller::Content::drawRect(KDContext *ctx, KDRect) const {
   ctx->fillRect(KDRect(0, bottom, width, Footer), bar);
 
   const auto screen = m_owner->m_screen;
-  draw(ctx, screen == Screen::Locked ? "Notes" : screen == Screen::List ? "Mes notes" : m_owner->m_name, KDPoint(10, 5), bar);
+  draw(ctx, isPasswordScreen(screen) ? "Notes" : screen == Screen::List ? "Mes notes" : m_owner->m_name, KDPoint(10, 5), bar);
   const char *hint = "OK Ouvrir     > Options";
   if (screen == Screen::List) {
     int count = 0;
     m_owner->noteAt(-1, &count);
-    for (int row = 0; row < VisibleRows && m_owner->m_first + row <= count; ++row) {
+    for (int row = 0; row < VisibleRows && m_owner->m_first + row <= count + 1; ++row) {
       const int index = m_owner->m_first + row;
       const int y = Header + row * Row;
       const bool active = index == m_owner->m_selected;
@@ -113,6 +115,8 @@ void Controller::Content::drawRect(KDContext *ctx, KDRect) const {
       }
       if (index == count) {
         draw(ctx, "+ Nouvelle note", KDPoint(11, y + 7), color, accent);
+      } else if (index == count + 1) {
+        draw(ctx, "Changer le mot de passe", KDPoint(11, y + 7), color);
       } else {
         char title[MaxName + 1];
         const char *filename = m_owner->noteAt(index).fullName();
@@ -122,10 +126,10 @@ void Controller::Content::drawRect(KDContext *ctx, KDRect) const {
         draw(ctx, "...", KDPoint(width - 31, y + 7), color, accent);
       }
     }
-    if (count + 1 > VisibleRows) {
+    if (count + 2 > VisibleRows) {
       const int track = Row * VisibleRows;
-      const int length = std::max(9, track * VisibleRows / (count + 1));
-      const int y = Header + (track - length) * m_owner->m_first / (count + 1 - VisibleRows);
+      const int length = std::max(9, track * VisibleRows / (count + 2));
+      const int y = Header + (track - length) * m_owner->m_first / (count + 2 - VisibleRows);
       ctx->fillRect(KDRect(width - 3, Header, 3, track), Palette::ScrollBarBackground);
       ctx->fillRect(KDRect(width - 3, y, 3, length), accent);
     }
@@ -146,12 +150,19 @@ void Controller::Content::drawRect(KDContext *ctx, KDRect) const {
     draw(ctx, "Supprimer cette note ?", KDPoint(12, 48), background,
          Palette::PrimaryText, KDFont::LargeFont);
     hint = "OK Supprimer    BACK Annuler";
-  } else if (screen == Screen::Rename || screen == Screen::Locked) {
+  } else if (screen == Screen::Rename || isPasswordScreen(screen)) {
     const bool locked = screen == Screen::Locked;
-    draw(ctx, locked ? "Mot de passe" : "Nouveau nom", KDPoint(12, 48),
+    const char *prompt = "Nouveau nom";
+    switch (screen) {
+      case Screen::Locked: prompt = "Mot de passe"; break;
+      case Screen::NewPassword: prompt = "Nouveau mot de passe"; break;
+      case Screen::ConfirmPassword: prompt = "Confirmer le mot de passe"; break;
+      default: break;
+    }
+    draw(ctx, prompt, KDPoint(12, 48),
          background, Palette::PrimaryText, KDFont::LargeFont);
     ctx->strokeRect(KDRect(12, 68, width - 24, 32), accent);
-    if (!locked) {
+    if (screen == Screen::Rename || screen == Screen::NewPassword) {
       draw(ctx, "Minuscules, chiffres et _", KDPoint(12, 106), background, Palette::SecondaryText);
     }
     hint = locked ? "OK Valider   HOME Quitter" : "OK Valider    BACK Retour";
@@ -207,8 +218,8 @@ void Controller::failed(const char *status) {
 void Controller::didBecomeFirstResponder() {
   if (m_screen == Screen::Edit) {
     Container::activeApp()->setFirstResponder(&m_view.area);
-  } else if (m_screen == Screen::Rename || m_screen == Screen::Locked) {
-    if (m_screen == Screen::Locked) {
+  } else if (m_screen == Screen::Rename || isPasswordScreen(m_screen)) {
+    if (isPasswordScreen(m_screen)) {
       m_view.name.reinitDraftTextBuffer();
       AppsContainer::sharedAppsContainer()->setShiftAlphaStatus(Ion::Events::ShiftAlphaStatus::AlphaLock);
     }
@@ -307,6 +318,10 @@ bool Controller::handleEvent(Ion::Events::Event event) {
     if (event == OK || event == EXE) {
       m_record.destroy();
       m_record = {};
+      int count = 0;
+      noteAt(-1, &count);
+      m_selected = std::min(m_selected, count);
+      m_first = std::min(m_first, std::max(0, count + 2 - VisibleRows));
       show(Screen::List);
       return true;
     }
@@ -344,13 +359,21 @@ bool Controller::handleEvent(Ion::Events::Event event) {
   if (event == Up || event == Down) {
     int count = 0;
     noteAt(-1, &count);
-    m_selected = std::max(0, std::min(count, m_selected + (event == Up ? -1 : 1)));
+    m_selected = std::max(0, std::min(count + 1, m_selected + (event == Up ? -1 : 1)));
     m_first = std::max(m_selected - VisibleRows + 1, std::min(m_first, m_selected));
     show(Screen::List);
     return true;
   }
   if (event != OK && event != EXE && event != Right) {
     return false;
+  }
+  int count = 0;
+  noteAt(-1, &count);
+  if (m_selected == count + 1) {
+    if (event != Right) {
+      show(Screen::NewPassword);
+    }
+    return true;
   }
   const auto record = noteAt(m_selected);
   if (record.isNull()) {
@@ -386,7 +409,10 @@ bool Controller::textFieldDidReceiveEvent(TextField *field, Ion::Events::Event e
 
 bool Controller::textFieldDidFinishEditing(TextField *field, const char *text, Ion::Events::Event) {
   if (m_screen == Screen::Locked) {
-    if (strcmp(text, "casio") != 0) {
+    const auto record = storage()->recordNamed(PasswordRecord);
+    const auto data = record.isNull() ? Record::Data{DefaultPassword, sizeof(DefaultPassword)} : record.value();
+    const size_t length = strlen(text) + 1;
+    if (data.size != length || memcmp(data.buffer, text, length) != 0) {
       field->reinitDraftTextBuffer();
       field->setCursorLocation(field->draftTextBuffer());
       field->resetSelection();
@@ -395,6 +421,34 @@ bool Controller::textFieldDidFinishEditing(TextField *field, const char *text, I
     }
     AppsContainer::sharedAppsContainer()->setShiftAlphaStatus(Ion::Events::ShiftAlphaStatus::Default);
     show(Screen::List);
+    return true;
+  }
+  if (m_screen == Screen::NewPassword) {
+    if (!validName(text)) {
+      failed("Utilise a-z, 0-9 ou _");
+      return false;
+    }
+    strlcpy(m_pendingPassword, text, sizeof(m_pendingPassword));
+    show(Screen::ConfirmPassword);
+    return true;
+  }
+  if (m_screen == Screen::ConfirmPassword) {
+    if (strcmp(text, m_pendingPassword) != 0) {
+      field->reinitDraftTextBuffer();
+      failed("Les mots de passe different");
+      return false;
+    }
+    const size_t size = strlen(text) + 1;
+    auto record = storage()->recordNamed(PasswordRecord);
+    auto result = record.isNull() ? storage()->createRecordWithFullName(PasswordRecord, text, size)
+                                  : record.setValue({text, size});
+    if (result != Record::ErrorStatus::None) {
+      failed("Sauvegarde impossible");
+      return false;
+    }
+    memset(m_pendingPassword, 0, sizeof(m_pendingPassword));
+    AppsContainer::sharedAppsContainer()->setShiftAlphaStatus(Ion::Events::ShiftAlphaStatus::Default);
+    show(Screen::List, "Mot de passe modifie");
     return true;
   }
   if (!validName(text)) {
@@ -420,7 +474,13 @@ bool Controller::textFieldDidFinishEditing(TextField *field, const char *text, I
 }
 
 bool Controller::textFieldDidAbortEditing(TextField *) {
-  show(m_screen == Screen::Locked ? Screen::Locked : Screen::Options);
+  if (isPasswordScreen(m_screen)) {
+    memset(m_pendingPassword, 0, sizeof(m_pendingPassword));
+    AppsContainer::sharedAppsContainer()->setShiftAlphaStatus(Ion::Events::ShiftAlphaStatus::Default);
+    show(m_screen == Screen::Locked ? Screen::Locked : Screen::List);
+  } else {
+    show(Screen::Options);
+  }
   return true;
 }
 
